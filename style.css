@@ -1,0 +1,580 @@
+/* Custom Fonts & Global Styles */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+
+:root {
+    --primary-color: #007bff; /* أزرق داكن */
+    --secondary-color: #6c757d; /* رمادي */
+    --accent-color: #28a745; /* أخضر */
+    --bg-color: #f8f9fa; /* لون خلفية فاتح */
+    --text-color: #343a40; /* لون النص الداكن */
+    --panel-bg: rgba(255, 255, 255, 0.95);
+    --border-radius: 12px; /* تم زيادة */
+    --shadow: 0 6px 20px rgba(0, 0, 0, 0.15); /* تم تحسين الظل */
+}
+
+body {
+    margin: 0;
+    font-family: 'Cairo', sans-serif;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.main-header {
+    background-image: linear-gradient(to right, #0056b3, var(--primary-color)); /* تدرج لوني */
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow);
+    z-index: 10;
+    position: relative;
+    /* لإصلاح مشكلة الحروف العربية المتقطعة في الهيدر */
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.main-header h1 {
+    margin: 0;
+    font-size: 2em;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+.main-header nav button {
+    background-color: transparent;
+    color: white;
+    border: 2px solid white;
+    padding: 10px 15px;
+    margin-left: 10px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    /* لإصلاح مشكلة الحروف العربية المتقطعة في الأزرار */
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.main-header nav button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+}
+
+.main-header nav button.active {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px rgba(40, 167, 69, 0.4);
+}
+
+.main-header nav button.active:hover {
+    background-color: #218838;
+}
+
+/* SOS Button */
+.sos-btn {
+    background-color: #dc3545;
+    color: white;
+    border: 2px solid #c82333;
+    padding: 12px 20px;
+    border-radius: 50px;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: sosPulse 1.5s infinite alternate;
+    /* لإصلاح مشكلة الحروف العربية المتقطعة في زر SOS */
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.sos-btn:hover {
+    background-color: #c82333;
+    transform: scale(1.05);
+}
+
+@keyframes sosPulse {
+    from {
+        box-shadow: 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    to {
+        box-shadow: 0 0 10px rgba(220, 53, 69, 0.7), 0 0 20px rgba(220, 53, 69, 0.5);
+    }
+}
+
+
+#map {
+    flex-grow: 1;
+    width: 100%;
+    height: calc(100vh - 70px);
+    position: relative;
+    z-index: 1;
+}
+
+/* Overlay Panels (Profile, Connect, Chat, Features, Settings) */
+.overlay-panel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--panel-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 30px;
+    min-width: 350px;
+    max-width: 90%;
+    z-index: 20;
+    display: none;
+    flex-direction: column;
+    gap: 20px;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    animation: fadeIn 0.3s ease-out;
+    overflow-y: auto;
+    max-height: 90vh;
+    /* لإصلاح مشكلة الحروف العربية المتقطعة في اللوحات */
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.overlay-panel.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.overlay-panel h2 {
+    color: var(--primary-color);
+    margin-top: 0;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.8em;
+}
+
+.overlay-panel input[type="text"],
+.overlay-panel input[type="tel"], /* جديد: لرقم الواتساب */
+.overlay-panel select, /* جديد: لاختيار الأيقونة والصديق */
+.overlay-panel button {
+    width: 100%;
+    padding: 14px;
+    border-radius: var(--border-radius);
+    border: 1px solid #ccc;
+    font-size: 1.1em;
+    /* لإصلاح مشكلة الحروف العربية المتقطعة في حقول الإدخال */
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.overlay-panel button {
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.overlay-panel button:hover {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+}
+
+.overlay-panel .close-btn {
+    background-color: var(--secondary-color);
+    margin-top: 25px;
+}
+
+.overlay-panel .close-btn:hover {
+    background-color: #5a6268;
+}
+
+.profile-info {
+    text-align: center;
+}
+
+#userPhoto {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 20px;
+    border: 4px solid var(--accent-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+#linkedFriendsList ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#linkedFriendsList li {
+    padding: 10px 0;
+    border-bottom: 1px dashed #eee;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.1em;
+}
+#linkedFriendsList li:last-child {
+    border-bottom: none;
+}
+
+/* Chat specific styles */
+.chat-input-area {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.chat-input-area input {
+    flex-grow: 1;
+}
+
+.chat-input-area button {
+    width: auto;
+    padding: 10px 15px;
+}
+
+#chatMessages {
+    height: 250px;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    padding: 15px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: #f0f2f5;
+}
+
+.message {
+    background-color: #e9ecef;
+    padding: 10px 15px;
+    border-radius: 20px;
+    max-width: 75%;
+    align-self: flex-start;
+    font-size: 0.95em;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    /* لإصلاح مشكلة الحروف العربية المتقطعة في الرسائل */
+    direction: rtl;
+    unicode-bidi: embed;
+    text-align: right; /* لتنسيق النص العربي */
+}
+
+.message.sent {
+    background-color: var(--primary-color);
+    color: white;
+    align-self: flex-end;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    text-align: right;
+}
+.message-meta { /* جديد: لتاريخ الرسالة واسم المرسل */
+    font-size: 0.8em;
+    color: #888;
+    display: block;
+    margin-bottom: 3px;
+    text-align: left; /* للحفاظ على التاريخ واسم المرسل بتنسيق يسار-يمين */
+}
+.message.sent .message-meta {
+    color: #eee;
+    text-align: right; /* لتنسيق التاريخ واسم المرسل داخل الرسالة المرسلة */
+}
+
+/* Marker for users on Map */
+.mapboxgl-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+}
+
+.user-marker-photo {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 4px solid var(--accent-color);
+    object-fit: cover;
+    box-shadow: var(--shadow);
+    animation: pulse 1.5s infinite alternate;
+}
+
+.user-marker-name {
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    margin-top: 8px;
+    white-space: nowrap;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    /* لإصلاح مشكلة الحروف العربية المتقطعة */
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+/* Message Bubble over marker */
+.message-bubble {
+    position: absolute;
+    bottom: calc(100% + 15px);
+    background-color: #333;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 25px;
+    font-size: 1em;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(10px);
+    left: 50%;
+    z-index: 30;
+    box-shadow: var(--shadow);
+    /* لإصلاح مشكلة الحروف العربية المتقطعة */
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.message-bubble.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Animations */
+@keyframes pulse {
+    from {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+    }
+    to {
+        transform: scale(1.1);
+        box-shadow: 0 0 10px 5px rgba(40, 167, 69, 0);
+    }
+}
+
+/* Holy Site Marker */
+.holy-site-marker {
+    width: 40px;
+    height: 40px;
+    background-color: #8A2BE2;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5em;
+    border: 3px solid #6A0DAD;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+.holy-site-marker:hover {
+    transform: scale(1.1);
+}
+
+/* POI Marker */
+.poi-marker { /* جديد: لعلامات نقاط الاهتمام */
+    width: 45px;
+    height: 45px;
+    background-color: #FFC107; /* أصفر */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #333;
+    font-size: 1.6em;
+    border: 3px solid #e0a800;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+.poi-marker:hover {
+    transform: scale(1.1);
+}
+
+/* Meeting Point Marker */
+.meeting-point-marker {
+    width: 45px;
+    height: 45px;
+    background-color: #17a2b8; /* تركواز */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.8em;
+    border: 3px solid #138496;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+.meeting-point-marker:hover {
+    transform: scale(1.1);
+}
+
+
+/* Features Panel Specific Styles */
+.feature-section {
+    background-color: #f2f4f6;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border: 1px solid #e0e0e0;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.feature-section h3 {
+    color: var(--primary-color);
+    margin: 0;
+    font-size: 1.3em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.feature-info {
+    font-size: 0.9em;
+    color: #555;
+    margin: 0;
+}
+
+.feature-section button:disabled {
+    background-color: var(--secondary-color);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.feature-section button:disabled:hover {
+    background-color: var(--secondary-color);
+    transform: none;
+}
+
+/* Toggle Switch Styling */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+    align-self: flex-end;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    -webkit-transition: .4s;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    -webkit-transition: .4s;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--accent-color);
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px var(--accent-color);
+}
+
+input:checked + .slider:before {
+    -webkit-transform: translateX(26px);
+    -ms-transform: translateX(26px);
+    transform: translateX(26px);
+}
+
+/* Responsive Design for smaller screens */
+@media (max-width: 768px) {
+    .main-header {
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+    }
+    .main-header h1 {
+        font-size: 1.8em;
+    }
+    .main-header nav button {
+        margin: 5px;
+        padding: 8px 12px;
+        font-size: 0.85em;
+    }
+    .sos-btn {
+        position: static;
+        margin-top: 10px;
+        width: 100%;
+        padding: 10px;
+    }
+    .overlay-panel {
+        min-width: unset;
+        width: 95%;
+        padding: 20px;
+        gap: 15px;
+    }
+    .overlay-panel h2 {
+        font-size: 1.5em;
+    }
+    .overlay-panel input[type="text"],
+    .overlay-panel input[type="tel"],
+    .overlay-panel select,
+    .overlay-panel button {
+        padding: 10px;
+        font-size: 1em;
+    }
+    #userPhoto {
+        width: 90px;
+        height: 90px;
+    }
+    #chatMessages {
+        height: 200px;
+    }
+    .feature-section {
+        padding: 10px;
+        gap: 8px;
+    }
+    .feature-section h3 {
+        font-size: 1.1em;
+    }
+}
