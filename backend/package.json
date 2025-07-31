@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"  // هنا لا توجد فاصلة بعد هذا السطر
+    "start": "node server.js"  // <-- تم حذف الفاصلة هنا
   },
   "keywords": [],
   "author": "",
