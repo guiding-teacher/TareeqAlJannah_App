@@ -1,15 +1,20 @@
-
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend server for Tareeq Al Jannah application.",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"  // هذا السطر مهم جداً
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "tracking",
+    "map",
+    "socket.io",
+    "mongodb",
+    "express"
+  ],
+  "author": "Your Name",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.4.5",
