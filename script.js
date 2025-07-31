@@ -64,7 +64,7 @@ const holySites = [
     { name: 'النجف الأشرف', coords: [44.3312, 31.9961], icon: '<i class="fas fa-mosque"></i>' }
 ];
 
-const socket = io('http://localhost:3000');
+const socket = io('https://github.com/guiding-teacher/TareeqAlJannah_App');
 
 // ====== وظائف عامة للواجهة الرسومية (UI Helpers) ======
 
