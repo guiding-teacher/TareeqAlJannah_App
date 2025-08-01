@@ -1,7 +1,5 @@
 // script.js
 
-// script.js
-
 // ====== إعدادات Mapbox ======
 mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
 
@@ -64,7 +62,9 @@ const holySites = [
     { name: 'النجف الأشرف', coords: [44.3312, 31.9961], icon: '<i class="fas fa-mosque"></i>' }
 ];
 
-const socket = io('https://tareeqaljannah-app.onrender.com');
+// تأكد من تحديث هذا الرابط إلى رابط خدمة Render الخاصة بك
+// const socket = io('https://YOUR-RENDER-APP-NAME.onrender.com');
+const socket = io('https://tareeqaljannah-app.onrender.com'); // مثال: استبدل هذا بعنوان URL الصحيح من Render
 
 // ====== وظائف عامة للواجهة الرسومية (UI Helpers) ======
 
@@ -118,8 +118,11 @@ function createCustomMarker(user) {
         el.classList.add('stealth-mode');
     }
 
+    // استخدم الصورة الافتراضية إذا كانت صورة المستخدم غير متوفرة أو فارغة
+    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER';
+
     el.innerHTML = `
-        <img class="user-marker-photo" src="${user.photo || 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER'}" alt="${user.name}">
+        <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}">
         <div class="user-marker-name">${user.name}</div>
         <div class="message-bubble" id="msg-bubble-${user.userId}"></div>
     `;
@@ -769,7 +772,7 @@ socket.on('locationUpdate', (data) => {
     if (data.userId === currentUser.userId) {
         currentUser.location = data.location;
         currentUser.battery = data.battery;
-        currentUser.batteryStatus = data.battery;
+        currentUser.batteryStatus = data.battery; // للتوافق
         currentUser.settings = data.settings;
         currentUser.lastSeen = data.lastSeen;
         userToUpdate = currentUser;
@@ -778,7 +781,7 @@ socket.on('locationUpdate', (data) => {
         if (userToUpdate) {
             userToUpdate.location = data.location;
             userToUpdate.battery = data.battery;
-            userToUpdate.batteryStatus = data.battery;
+            userToUpdate.batteryStatus = data.battery; // للتوافق
             userToUpdate.settings = data.settings;
             userToUpdate.lastSeen = data.lastSeen;
         } else {
@@ -879,17 +882,14 @@ socket.on('updateFriendsList', (friendsData) => {
 });
 
 socket.on('newChatMessage', (data) => {
-    // تحديث لوحة الدردشة فقط إذا كانت هذه الرسالة تخص المحادثة الحالية
-    if (currentUser && data.receiverId === currentUser.userId && data.senderId === currentChatFriendId) {
-        addChatMessage(data.senderName, data.message, 'received', data.timestamp);
-    }
-    // عرض فقاعة الرسالة دائماً (إذا لم يكن المستخدم قد قام بإخفائها)
-    if (!currentUser.settings.hideBubbles) {
-        showMessageBubble(data.senderId, data.message);
-    }
-    // تشغيل الصوت إذا كانت الأصوات مفعلة
-    if (currentUser.settings.sound) {
-        playNotificationSound();
+    if (currentUser && data.receiverId === currentUser.userId) {
+        addChatMessage(data.senderName, data.message, 'received');
+        if (currentUser.settings.sound) {
+            playNotificationSound();
+        }
+        if (!currentUser.settings.hideBubbles) {
+            showMessageBubble(data.senderId, data.message);
+        }
     }
 });
 
@@ -908,7 +908,7 @@ socket.on('removeUserMarker', (data) => {
 socket.on('poiStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        socket.emit('requestPOIs'); // إذا نجحت الإضافة، اطلب تحديث قائمة النقاط
+        socket.emit('requestPOIs');
     }
 });
 
@@ -936,26 +936,6 @@ socket.on('historicalPathData', (data) => {
         }
     } else {
         alert(`فشل جلب المسار التاريخي: ${data.message}`);
-    }
-});
-
-// حدث لاستقبال سجل الدردشة
-socket.on('chatHistoryData', (data) => {
-    const chatMessagesDiv = document.getElementById('chatMessages');
-    if (!chatMessagesDiv) return; // تأكد أن العنصر موجود
-
-    chatMessagesDiv.innerHTML = ''; // مسح الرسائل القديمة
-
-    if (data.success && data.history && data.history.length > 0) {
-        data.history.forEach(msg => {
-            const messageType = (msg.senderId === currentUser.userId) ? 'sent' : 'received';
-            // جلب اسم المرسل (يمكن أن نمرر الاسم من الخادم لتجنب البحث هنا)
-            const senderName = (msg.senderId === currentUser.userId) ? currentUser.name :
-                               linkedFriends.find(f => f.userId === msg.senderId)?.name || 'صديق';
-            addChatMessage(senderName, msg.message, messageType, msg.timestamp);
-        });
-    } else {
-        chatMessagesDiv.innerHTML = '<p style="text-align: center; color: #777;">لا توجد رسائل سابقة في هذه المحادثة.</p>';
     }
 });
 
@@ -1208,7 +1188,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             });
-
         } else {
             friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
         }
