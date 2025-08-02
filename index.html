@@ -1,18 +1,12 @@
- 
-    <!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طريق الجنة - تحديد المواقع والمراسلة المخصص للعراق</title>
-    <!-- Mapbox GL JS CSS -->
-   <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
-     <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
-    <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -24,6 +18,8 @@
             <button id="showFriendsMapBtn" title="خريطة الأصدقاء والربط"><i class="fas fa-handshake"></i> أصدقائي</button>
             <button id="showProfileBtn" title="الملف الشخصي"><i class="fas fa-user"></i></button>
             <button id="showConnectBtn" title="ربط حساب"><i class="fas fa-link"></i></button>
+            <!-- ** جديد: زر لقسم المعزب ** -->
+            <button id="showMoazebBtn" title="المضيفين"><i class="fas fa-home"></i> المعزب</button>
             <button id="showFeaturesBtn" title="ميزات إضافية"><i class="fas fa-bars"></i></button>
             <button id="showSettingsBtn" title="الإعدادات والخصوصية"><i class="fas fa-cog"></i></button>
         </nav>
@@ -32,16 +28,14 @@
 
     <div id="map"></div>
 
-    <!-- جديد: شريط الدردشة الثابت في الأسفل -->
     <div id="bottomChatBar" class="bottom-chat-bar">
         <select id="bottomChatFriendSelect"></select>
         <input type="text" id="bottomChatInput" placeholder="اكتب رسالتك هنا...">
         <button id="bottomChatSendBtn"><i class="fas fa-paper-plane"></i></button>
-        <button id="toggleChatHistoryBtn" title="سجل الدردشة"><i class="fas fa-history"></i></button> <!-- جديد -->
+        <button id="toggleChatHistoryBtn" title="سجل الدردشة"><i class="fas fa-history"></i></button>
     </div>
 
-
-    <!-- لوحة المعلومات الأولية (تظهر عند بدء التشغيل إذا كانت بيانات المستخدم ناقصة) -->
+    <!-- لوحة المعلومات الأولية -->
     <div class="overlay-panel" id="initialInfoPanel">
         <h2><i class="fas fa-info-circle"></i> معلوماتك الشخصية</h2>
         <p>الرجاء إدخال معلوماتك لإنشاء ملفك الشخصي.</p>
@@ -64,7 +58,6 @@
             <p><strong>الاسم:</strong> <span id="userName">اسم المستخدم</span></p>
             <p><strong>رمز الربط:</strong> <span id="userLinkCode">ABCD123</span> <button id="copyLinkCodeBtn" style="width: auto; padding: 5px 10px; margin-right: 5px;"><i class="fas fa-copy"></i> نسخ</button></p>
             <button id="generateCodeBtn"><i class="fas fa-sync-alt"></i> توليد رمز جديد</button>
-            <!-- جديد: قسم تعديل معلومات المستخدم الأساسية -->
             <div class="feature-section" style="margin-top: 20px;">
                 <h3><i class="fas fa-user-edit"></i> تعديل معلوماتك</h3>
                 <input type="text" id="editUserNameInput" placeholder="اسمك الجديد">
@@ -122,8 +115,27 @@
             <button id="clearHistoricalPathBtn"><i class="fas fa-eraser"></i> مسح المسار</button>
         </div>
         <div class="feature-section">
+            <h3><i class="fas fa-handshake"></i> وضع التجمع</h3>
+            <p class="feature-info">حدد نقطة على الخريطة لتظهر لأصدقائك فقط.</p>
+            <input type="text" id="meetingPointInput" placeholder="اسم نقطة التجمع">
+            <button id="setMeetingPointBtn"><i class="fas fa-crosshairs"></i> تحديد النقطة الحالية كنقطة تجمع</button>
+            <!-- ** جديد: زر لإنهاء نقطة التجمع ** -->
+            <button id="endMeetingPointBtn" class="danger-btn" style="display: none;"><i class="fas fa-times-circle"></i> إنهاء نقطة التجمع</button>
+        </div>
+        <div class="feature-section">
+            <h3><i class="fas fa-map-marker-alt"></i> نقاط الاهتمام المجتمعية (POIs)</h3>
+            <p class="feature-info">إضافة ومشاركة مواقع مهمة (استراحات، إلخ).</p>
+            <label for="poiCategorySelect">اختر الفئة:</label>
+            <select id="poiCategorySelect"></select> <!-- تم تغيير ID -->
+            <button id="addPoiBtn"><i class="fas fa-plus"></i> إضافة نقطة اهتمام في موقعي</button> <!-- تم تغيير ID -->
+        </div>
+        <div class="feature-section">
+            <h3><i class="fas fa-mosque"></i> أوقات الصلاة (لمدينة كربلاء)</h3>
+            <div id="prayerTimesDisplay">جاري التحميل...</div>
+            <button id="refreshPrayerTimesBtn"><i class="fas fa-redo"></i> تحديث</button>
+        </div>
+        <div class="feature-section">
             <h3><i class="fas fa-globe-africa"></i> التحكم بـ 3D الخريطة</h3>
-            <p class="feature-info">تحكم في زاوية وميل عرض الخريطة ثلاثية الأبعاد.</p>
             <div style="display: flex; flex-direction: column; gap: 5px;">
                 <label for="mapPitch">الميل (Pitch):</label>
                 <input type="range" id="mapPitch" min="0" max="80" value="45">
@@ -132,30 +144,36 @@
             </div>
         </div>
         <div class="feature-section">
-            <h3><i class="fas fa-shield-alt"></i> المناطق الآمنة / الخطرة</h3>
-            <p class="feature-info">عرض مناطق محددة. (قيد التطوير).</p>
-            <button disabled><i class="fas fa-eye"></i> إظهار المناطق</button>
-        </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-map-marker-alt"></i> نقاط الاهتمام المجتمعية (POIs)</h3>
-            <p class="feature-info">إضافة ومشاركة مواقع مهمة (استراحات، إلخ).</p>
-            <label for="poiIconSelect">اختر أيقونة:</label>
-            <select id="poiIconSelect"></select>
-            <button id="addRestAreaBtn"><i class="fas fa-bed"></i> إضافة نقطة اهتمام</button>
-        </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-mosque"></i> أوقات الصلاة</h3>
-            <div id="prayerTimesDisplay"></div>
-            <button id="refreshPrayerTimesBtn"><i class="fas fa-redo"></i> تحديث</button>
-        </div>
-        <div class="feature-section">
             <h3><i class="fas fa-battery-full"></i> حالة البطارية (الأصدقاء)</h3>
             <ul id="friendBatteryStatus"></ul>
         </div>
+        <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
+    </div>
+
+    <!-- ** جديد: لوحة المعزب ** -->
+    <div class="overlay-panel" id="moazebPanel">
+        <h2><i class="fas fa-home"></i> قسم المضيفين (المعزب)</h2>
         <div class="feature-section">
-            <h3><i class="fas fa-handshake"></i> وضع التجمع</h3>
-            <input type="text" id="meetingPointInput" placeholder="اسم نقطة التجمع">
-            <button id="setMeetingPointBtn"><i class="fas fa-crosshairs"></i> تحديد النقطة</button>
+            <h3><i class="fas fa-search"></i> البحث عن مضيف</h3>
+            <div class="search-form">
+                <input type="text" id="searchMoazebPhone" placeholder="رقم الهاتف">
+                <input type="text" id="searchMoazebGov" placeholder="المحافظة">
+                <input type="text" id="searchMoazebDist" placeholder="القضاء">
+                <button id="searchMoazebBtn"><i class="fas fa-search"></i> بحث</button>
+            </div>
+            <div id="moazebResultsContainer">
+                <p class="feature-info">نتائج البحث ستظهر هنا...</p>
+            </div>
+        </div>
+        <div class="feature-section">
+            <h3><i class="fas fa-user-plus"></i> إضافة مضيف جديد (في موقعك الحالي)</h3>
+            <p class="feature-info">ساعد الآخرين بإضافة معلومات مضيف جديد. سيتم تسجيله في موقعك الحالي على الخريطة.</p>
+            <input type="text" id="addMoazebName" placeholder="الاسم الكامل للمضيف">
+            <input type="text" id="addMoazebAddress" placeholder="العنوان التفصيلي (أقرب نقطة دالة)">
+            <input type="tel" id="addMoazebPhone" placeholder="رقم الهاتف">
+            <input type="text" id="addMoazebGov" placeholder="المحافظة">
+            <input type="text" id="addMoazebDist" placeholder="القضاء/الناحية">
+            <button id="addMoazebBtn"><i class="fas fa-plus-circle"></i> إضافة المضيف</button>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
@@ -200,9 +218,7 @@
     </div>
 
 
-    <!-- Mapbox GL JS Library -->
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
-    <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script src="script.js"></script>
 </body>
