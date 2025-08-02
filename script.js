@@ -1,10 +1,7 @@
 // script.js
 
-
-
-// script.js
-
 // ====== إعدادات Mapbox ======
+// تأكد من أن هذا المفتاح صحيح!
 mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
 
 const map = new mapboxgl.Map({
@@ -12,8 +9,8 @@ const map = new mapboxgl.Map({
     style: 'mapbox://styles/mapbox/streets-v11',
     center: [43.6875, 33.3152],
     zoom: 6,
-    pitch: 45,
-    bearing: -17.6
+    pitch: 45, // ميل افتراضي 3D
+    bearing: -17.6 // دوران افتراضي 3D
 });
 
 // ====== متغيرات عامة سيتم ملؤها من الخادم ======
@@ -66,7 +63,6 @@ const holySites = [
     { name: 'النجف الأشرف', coords: [44.3312, 31.9961], icon: '<i class="fas fa-mosque"></i>' }
 ];
 
-
 // تأكد من تحديث هذا الرابط إلى رابط خدمة Render الخاصة بك
 const socket = io('https://tareeqaljannah-app.onrender.com'); // مثال: استبدل هذا بعنوان URL الصحيح من Render
 
@@ -118,6 +114,14 @@ function createCustomMarker(user) {
     const el = document.createElement('div');
     el.className = 'mapboxgl-marker';
 
+    // إضافة فئة لتحديد مركر المستخدم الحالي مقابل مركر الصديق لتغيير لون الإطار
+    if (user.userId === currentUser.userId) {
+        el.classList.add('current-user-marker'); // لجعل الإطار أخضر
+    } else {
+        el.classList.add('friend-marker'); // لجعل الإطار أزرق
+    }
+
+
     if (currentUser && user.userId === currentUser.userId && currentUser.settings.stealthMode) {
         el.classList.add('stealth-mode');
     }
@@ -135,6 +139,7 @@ function createCustomMarker(user) {
         .setLngLat(user.location.coordinates)
         .addTo(map);
 
+    // ربط حدث النقر على مركر الصديق (وليس المستخدم الحالي)
     if (user.userId !== currentUser.userId) {
         marker.getElement().addEventListener('click', () => {
             showFriendDetailsPopup(user);
@@ -168,10 +173,12 @@ function showFriendDetailsPopup(friend) {
     // تنسيق آخر ظهور
     const lastSeenTime = friend.lastSeen ? new Date(friend.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'غير معروف';
 
-    // جديد: عرض المعلومات بناءً على إعدادات الخصوصية
-    const genderHtml = friend.settings.showGender ? `<p><i class="fas fa-venus-mars"></i> الجنس: ${friend.gender === 'male' ? 'ذكر' : friend.gender === 'female' ? 'أنثى' : 'غير محدد'}</p>` : '';
-    const phoneHtml = friend.settings.showPhone ? `<p><i class="fas fa-phone-alt"></i> الهاتف: ${friend.phone || 'غير متاح'}</p>` : '';
-    const emailHtml = friend.settings.showEmail ? `<p><i class="fas fa-envelope"></i> البريد: ${friend.email || 'غير متاح'}</p>` : '';
+    // تفاصيل المستخدم الإضافية في الفقاعة
+    const friendDetailsHtml = `
+        ${friend.gender && friend.gender !== 'other' ? `<p><i class="fas fa-venus-mars"></i> الجنس: ${friend.gender === 'male' ? 'ذكر' : 'أنثى'}</p>` : ''}
+        ${friend.phone ? `<p><i class="fas fa-phone"></i> الهاتف: ${friend.phone}</p>` : ''}
+        ${friend.email ? `<p><i class="fas fa-envelope"></i> البريد: ${friend.email}</p>` : ''}
+    `;
 
 
     const popupContent = `
@@ -179,14 +186,18 @@ function showFriendDetailsPopup(friend) {
         <p><i class="fas fa-battery-full"></i> البطارية: ${friend.batteryStatus || 'N/A'}</p>
         ${distanceHtml}
         <p><i class="fas fa-clock"></i> آخر ظهور: ${lastSeenTime}</p>
-        ${genderHtml}
-        ${phoneHtml}
-        ${emailHtml}
+        ${friendDetailsHtml}
         <div style="display: flex; justify-content: space-around; margin-top: 10px;">
             <button id="unfriendBtn-${friend.userId}" class="unfriend-btn"><i class="fas fa-user-minus"></i> إلغاء الارتباط</button>
             <button id="chatFriendBtn-${friend.userId}" class="chat-friend-btn"><i class="fas fa-comments"></i> دردشة</button>
         </div>
     `;
+
+    // إزالة أي PopUp سابق لنفس المركر لضمان عدم التكرار
+    const existingPopup = friendMarkers[friend.userId]?._popup;
+    if (existingPopup) {
+        existingPopup.remove();
+    }
 
     const popup = new mapboxgl.Popup({ offset: 25 })
         .setLngLat(friend.location.coordinates)
@@ -318,12 +329,21 @@ function showFriendsMap() {
 
     if (currentUser && currentUser.location && currentUser.location.coordinates && !currentUser.settings.stealthMode && currentUser.settings.shareLocation) {
         createCustomMarker(currentUser);
-        map.flyTo({
-            center: currentUser.location.coordinates,
-            zoom: 12,
-            pitch: 45,
-            bearing: -17.6
-        });
+        // عند الدخول لخريطة الأصدقاء، لا تغادر الخريطة موقع المستخدم/الأصدقاء، ركز عليهم
+        // map.flyTo({ center: currentUser.location.coordinates, zoom: 12, pitch: 45, bearing: -17.6 });
+        
+        // جديد: مركز الخريطة على المستخدمين المرتبطين
+        if (linkedFriends.length > 0) {
+            const allCoords = [currentUser.location.coordinates, ...linkedFriends.map(f => f.location.coordinates).filter(Boolean)];
+            if (allCoords.length > 0) {
+                const bounds = new mapboxgl.LngLatBounds();
+                allCoords.forEach(coord => bounds.extend(coord));
+                map.fitBounds(bounds, { padding: 50, pitch: 45, bearing: -17.6 });
+            }
+        } else {
+            map.flyTo({ center: currentUser.location.coordinates, zoom: 12, pitch: 45, bearing: -17.6 });
+        }
+
     } else if (currentUser) {
         map.flyTo({
             center: [43.6875, 33.3152],
@@ -560,11 +580,12 @@ function startLocationTracking() {
         },
         (error) => {
             console.error("خطأ في تحديد الموقع:", error);
+            // قد تظهر رسالة الخطأ هذه إذا رفض المستخدم إذن الموقع
         },
         {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
+            enableHighAccuracy: true, // طلب أعلى دقة ممكنة
+            timeout: 10000,         // مهلة 10 ثوانٍ (للحصول على الموقع)
+            maximumAge: 0           // عدم استخدام مواقع قديمة مخبأة
         }
     );
 }
@@ -611,7 +632,7 @@ function sendMessage() {
         return;
     }
     if (messageText) { // الرسالة يجب ألا تكون فارغة
-        addChatMessage(currentUser.name, messageText, 'sent', new Date());
+        addChatMessage(currentUser.name, messageText, 'sent', new Date()); // إضافة new Date() ليكون له timestamp
 
         socket.emit('chatMessage', {
             senderId: currentUser.userId,
@@ -773,17 +794,17 @@ socket.on('currentUserData', (user) => {
     document.getElementById('editUserNameInput').value = currentUser.name;
     document.getElementById('emergencyWhatsappInput').value = currentUser.settings.emergencyWhatsapp || '';
 
+    // تحديث حقول المعلومات الأولية في لوحة initialInfoPanel
+    if (document.getElementById('initialInfoNameInput')) document.getElementById('initialInfoNameInput').value = currentUser.name;
+    if (document.getElementById('initialInfoGenderSelect')) document.getElementById('initialInfoGenderSelect').value = currentUser.gender;
+    if (document.getElementById('initialInfoPhoneInput')) document.getElementById('initialInfoPhoneInput').value = currentUser.phone;
+    if (document.getElementById('initialInfoEmailInput')) document.getElementById('initialInfoEmailInput').value = currentUser.email;
+
 
     document.getElementById('shareLocationToggle').checked = currentUser.settings.shareLocation;
     document.getElementById('soundToggle').checked = currentUser.settings.sound;
     document.getElementById('hideBubblesToggle').checked = currentUser.settings.hideBubbles;
     document.getElementById('stealthModeToggle').checked = currentUser.settings.stealthMode;
-
-    // تحديث خيارات الخصوصية الجديدة (التي ستُعرض للأصدقاء)
-    if (document.getElementById('showGenderToggle')) document.getElementById('showGenderToggle').checked = currentUser.settings.showGender;
-    if (document.getElementById('showPhoneToggle')) document.getElementById('showPhoneToggle').checked = currentUser.settings.showPhone;
-    if (document.getElementById('showEmailToggle')) document.getElementById('showEmailToggle').checked = currentUser.settings.showEmail;
-
 
     startLocationTracking();
 
@@ -791,19 +812,17 @@ socket.on('currentUserData', (user) => {
         socket.emit('requestFriendsData', { friendIds: currentUser.linkedFriends });
     }
 
-    // إظهار لوحة المعلومات الأولية إذا كانت البيانات غير مكتملة
-    const initialInfoPanel = document.getElementById('initialInfoPanel');
-    if (initialInfoPanel) {
-        if (currentUser.name && currentUser.gender !== 'other' && currentUser.phone && currentUser.email) {
-            initialInfoPanel.classList.remove('active');
-        } else {
-            initialInfoPanel.classList.add('active');
-            // تعبئة الحقول إذا كان هناك بيانات جزئية
-            if (document.getElementById('initialInfoNameInput')) document.getElementById('initialInfoNameInput').value = currentUser.name;
-            if (document.getElementById('initialInfoGenderSelect')) document.getElementById('initialInfoGenderSelect').value = currentUser.gender;
-            if (document.getElementById('initialInfoPhoneInput')) document.getElementById('initialInfoPhoneInput').value = currentUser.phone;
-            if (document.getElementById('initialInfoEmailInput')) document.getElementById('initialInfoEmailInput').value = currentUser.email;
-        }
+    // جديد: إظهار لوحة المعلومات الأولية إذا كانت البيانات غير مكتملة
+    // (يتم فحص البيانات المخزنة في localStorage أو التي جاءت من الخادم)
+    const storedName = localStorage.getItem('appUserName');
+    const storedGender = localStorage.getItem('appUserGender');
+    const storedPhone = localStorage.getItem('appUserPhone');
+    const storedEmail = localStorage.getItem('appUserEmail');
+
+    if (!storedName || storedGender === 'other' || !storedPhone || !storedEmail) {
+        document.getElementById('initialInfoPanel').classList.add('active');
+    } else {
+        document.getElementById('initialInfoPanel').classList.remove('active');
     }
 });
 
@@ -812,18 +831,24 @@ socket.on('locationUpdate', (data) => {
     if (data.userId === currentUser.userId) {
         currentUser.location = data.location;
         currentUser.battery = data.battery;
-        currentUser.batteryStatus = data.battery; // للتوافق
+        currentUser.batteryStatus = data.battery;
         currentUser.settings = data.settings;
         currentUser.lastSeen = data.lastSeen;
+        currentUser.gender = data.gender; // تحديث بيانات المستخدم
+        currentUser.phone = data.phone;
+        currentUser.email = data.email;
         userToUpdate = currentUser;
     } else {
         userToUpdate = linkedFriends.find(f => f.userId === data.userId);
         if (userToUpdate) {
             userToUpdate.location = data.location;
             userToUpdate.battery = data.battery;
-            userToUpdate.batteryStatus = data.battery; // للتوافق
+            userToUpdate.batteryStatus = data.battery;
             userToUpdate.settings = data.settings;
             userToUpdate.lastSeen = data.lastSeen;
+            userToUpdate.gender = data.gender; // تحديث بيانات الصديق
+            userToUpdate.phone = data.phone;
+            userToUpdate.email = data.email;
         } else {
             userToUpdate = {
                 userId: data.userId,
@@ -833,7 +858,10 @@ socket.on('locationUpdate', (data) => {
                 battery: data.battery,
                 batteryStatus: data.battery,
                 settings: data.settings,
-                lastSeen: data.lastSeen
+                lastSeen: data.lastSeen,
+                gender: data.gender,
+                phone: data.phone,
+                email: data.email
             };
             linkedFriends.push(userToUpdate);
         }
@@ -1044,8 +1072,8 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('appUserEmail', email);
 
             // إعادة إرسال بيانات المستخدم المكتملة إلى الخادم
-            if (currentUser && currentUser.userId) { // إذا كان currentUser معرفاً (أي تم إنشاء له user_ID من قبل)
-                socket.emit('registerUser', { // استخدم registerUser لتحديث البيانات
+            if (currentUser && currentUser.userId) {
+                socket.emit('registerUser', {
                     userId: currentUser.userId,
                     name: name,
                     photo: currentUser.photo,
@@ -1054,14 +1082,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     email: email,
                     emergencyWhatsapp: currentUser.settings.emergencyWhatsapp
                 });
-            } else { // إذا لم يكن currentUser معرفاً بعد، أعد تحميل الصفحة أو أظهر رسالة خطأ
-                alert("جاري إنشاء ملفك الشخصي. الرجاء تحديث الصفحة.");
-                location.reload(); // أعد تحميل الصفحة ليتم إنشاء المستخدم بشكل صحيح
             }
-
 
             initialInfoPanel.classList.remove('active'); // إخفاء اللوحة
             alert('تم حفظ معلوماتك بنجاح!');
+            // لا نحتاج لاستدعاء showGeneralMap هنا، لأن currentUserData ستعيد تحميل التطبيق
         } else {
             alert('الرجاء ملء جميع الحقول المطلوبة (الاسم، الجنس، الهاتف، البريد الإلكتروني).');
         }
@@ -1081,7 +1106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateNameBtn.id = 'updateUserNameBtn';
         profileInfoDiv.appendChild(updateNameBtn);
 
-        // زر نسخ رمز الربط
+        // جديد: زر نسخ رمز الربط
         const copyLinkCodeBtn = document.createElement('button');
         copyLinkCodeBtn.innerHTML = '<i class="fas fa-copy"></i> نسخ رمز الربط';
         copyLinkCodeBtn.id = 'copyLinkCodeBtn';
@@ -1232,8 +1257,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const selectedUserId = selectUserDropdown.value;
                     if (selectedUserId) {
                         socket.emit('requestHistoricalPath', { targetUserId: selectedUserId, limit: 200 }); // طلب 200 نقطة كحد أقصى
-                        // إخفاء لوحة الميزات بعد عرض السجل
-                        document.getElementById('featuresPanel').classList.remove('active');
                     } else {
                         alert("الرجاء اختيار مستخدم لعرض مساره.");
                     }
@@ -1246,45 +1269,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }
-    }
 
-    // 4. إضافة عنصر اختيار الصديق في لوحة الدردشة
-    const chatPanel = document.getElementById('chatPanel');
-    if (chatPanel) {
-        const chatMessagesDiv = document.getElementById('chatMessages'); // الرسائل
-        
-        // إنشاء عنصر الـ select الجديد (إذا لم يكن موجوداً)
-        let chatFriendSelectContainer = document.getElementById('chatFriendSelectContainer');
-        if (!chatFriendSelectContainer) {
-            chatFriendSelectContainer = document.createElement('div');
-            chatFriendSelectContainer.id = 'chatFriendSelectContainer';
-            chatFriendSelectContainer.className = 'chat-header';
-            chatFriendSelectContainer.style = "margin-bottom: 10px;";
-            chatFriendSelectContainer.innerHTML = `
-                <label for="chatFriendSelect" style="display: block; margin-bottom: 5px; color: #555;">الدردشة مع:</label>
-                <select id="chatFriendSelect" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;"></select>
-            `;
-            // إضافة الـ select قبل منطقة الرسائل
-            if(chatMessagesDiv && chatMessagesDiv.parentNode) {
-                chatMessagesDiv.parentNode.insertBefore(chatFriendSelectContainer, chatMessagesDiv);
-            }
+        // جديد: قسم التحكم بـ 3D الخريطة
+        const map3DControlSection = featuresPanel.querySelector('.feature-section h3:has(.fa-globe-africa)').closest('.feature-section');
+        if (map3DControlSection) {
+            const mapPitchInput = document.getElementById('mapPitch');
+            const mapBearingInput = document.getElementById('mapBearing');
+
+            mapPitchInput.addEventListener('input', (e) => {
+                map.setPitch(e.target.value);
+            });
+            mapBearingInput.addEventListener('input', (e) => {
+                map.setBearing(e.target.value);
+            });
         }
-
-        // ربط معالج حدث لزر الدردشة لتهيئة اللوحة
-        document.getElementById('showChatBtn').addEventListener('click', () => {
-            if (!currentUser) {
-                alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
-                return;
-            }
-            if (linkedFriends.length === 0) {
-                alert("الرجاء ربط صديق أولاً لبدء الدردشة.");
-                return;
-            }
-            togglePanel('chatPanel');
-            showFriendsMap();
-            setupChatPanel(); // استدعاء دالة إعداد لوحة الدردشة الجديدة
-        });
     }
+
+    // 4. إضافة عنصر اختيار الصديق في لوحة الدردشة (هذا يتم إنشاؤه في الجزء 1 من script.js)
+    // الآن، فقط تأكد من ربط معالج الأحداث لزر الدردشة بعد DOMContentLoaded
+    document.getElementById('showChatBtn').addEventListener('click', () => {
+        if (!currentUser) {
+            alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
+            return;
+        }
+        if (linkedFriends.length === 0) {
+            alert("الرجاء ربط صديق أولاً لبدء الدردشة.");
+            return;
+        }
+        togglePanel('chatPanel');
+        showFriendsMap();
+        setupChatPanel(); // استدعاء دالة إعداد لوحة الدردشة الجديدة
+    });
 
 
     // 5. ربط معالجات الأحداث للأزرار الرئيسية (بعد التأكد من وجودها في DOM)
@@ -1298,7 +1313,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showGeneralMap();
     });
 
-    // زر خريطة الأصدقاء
     document.getElementById('showFriendsMapBtn').addEventListener('click', () => {
         if (!currentUser) {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
@@ -1308,7 +1322,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showFriendsMap();
     });
 
-    // زر الملف الشخصي
     document.getElementById('showProfileBtn').addEventListener('click', () => {
         if (!currentUser) {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
@@ -1318,12 +1331,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('userPhoto').src = currentUser.photo;
         document.getElementById('userLinkCode').textContent = currentUser.linkCode;
         document.getElementById('editUserNameInput').value = currentUser.name;
-
-        // تحديث عرض معلومات المستخدم الشخصية في لوحة الملف الشخصي
-        document.getElementById('profileGender').textContent = currentUser.gender === 'male' ? 'ذكر' : currentUser.gender === 'female' ? 'أنثى' : 'غير محدد';
-        document.getElementById('profilePhone').textContent = currentUser.phone || 'غير متاح';
-        document.getElementById('profileEmail').textContent = currentUser.email || 'غير متاح';
-
+        
+        // تحديث الحقول في لوحة الإعدادات
+        if (document.getElementById('settingNameInput')) document.getElementById('settingNameInput').value = currentUser.name;
+        if (document.getElementById('settingGenderSelect')) document.getElementById('settingGenderSelect').value = currentUser.gender;
+        if (document.getElementById('settingPhoneInput')) document.getElementById('settingPhoneInput').value = currentUser.phone;
+        if (document.getElementById('settingEmailInput')) document.getElementById('settingEmailInput').value = currentUser.email;
 
         togglePanel('profilePanel');
         showFriendsMap();
@@ -1468,6 +1481,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         togglePanel('settingsPanel');
+        // تحديث حقول المعلومات الأساسية في لوحة الإعدادات
+        if (document.getElementById('settingNameInput')) document.getElementById('settingNameInput').value = currentUser.name;
+        if (document.getElementById('settingGenderSelect')) document.getElementById('settingGenderSelect').value = currentUser.gender;
+        if (document.getElementById('settingPhoneInput')) document.getElementById('settingPhoneInput').value = currentUser.phone;
+        if (document.getElementById('settingEmailInput')) document.getElementById('settingEmailInput').value = currentUser.email;
+
+
         if (document.getElementById('shareLocationToggle')) {
             document.getElementById('shareLocationToggle').checked = currentUser.settings.shareLocation;
         }
@@ -1483,11 +1503,50 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.getElementById('emergencyWhatsappInput')) { // تحديث حقل الواتساب عند فتح الإعدادات
             document.getElementById('emergencyWhatsappInput').value = currentUser.settings.emergencyWhatsapp || '';
         }
-        // تحديث أزرار الخصوصية الجديدة
-        if (document.getElementById('showGenderToggle')) document.getElementById('showGenderToggle').checked = currentUser.settings.showGender;
-        if (document.getElementById('showPhoneToggle')) document.getElementById('showPhoneToggle').checked = currentUser.settings.showPhone;
-        if (document.getElementById('showEmailToggle')) document.getElementById('showEmailToggle').checked = currentUser.settings.showEmail;
     });
+
+    // جديد: معالج لزر حفظ معلومات الملف الشخصي في لوحة الإعدادات
+    const updateProfileInfoBtn = document.getElementById('updateProfileInfoBtn');
+    if (updateProfileInfoBtn) {
+        updateProfileInfoBtn.addEventListener('click', () => {
+            if (!currentUser) return;
+            const newName = document.getElementById('settingNameInput').value.trim();
+            const newGender = document.getElementById('settingGenderSelect').value;
+            const newPhone = document.getElementById('settingPhoneInput').value.trim();
+            const newEmail = document.getElementById('settingEmailInput').value.trim();
+
+            if (newName && newGender !== 'other' && newPhone && newEmail) {
+                // تحديث بيانات المستخدم في الواجهة الأمامية محلياً
+                currentUser.name = newName;
+                currentUser.gender = newGender;
+                currentUser.phone = newPhone;
+                currentUser.email = newEmail;
+
+                // حفظ في Local Storage
+                localStorage.setItem('appUserName', newName);
+                localStorage.setItem('appUserGender', newGender);
+                localStorage.setItem('appUserPhone', newPhone);
+                localStorage.setItem('appUserEmail', newEmail);
+
+                // إرسال جميع البيانات (بما في ذلك الإعدادات الأخرى) إلى الخادم لتحديثها
+                socket.emit('updateSettings', {
+                    name: newName,
+                    gender: newGender,
+                    phone: newPhone,
+                    email: newEmail,
+                    shareLocation: currentUser.settings.shareLocation,
+                    sound: currentUser.settings.sound,
+                    hideBubbles: currentUser.settings.hideBubbles,
+                    stealthMode: currentUser.settings.stealthMode,
+                    emergencyWhatsapp: currentUser.settings.emergencyWhatsapp
+                });
+                alert('تم حفظ معلومات الملف الشخصي بنجاح!');
+            } else {
+                alert('الرجاء ملء جميع حقول معلومات الملف الشخصي المطلوبة.');
+            }
+        });
+    }
+
 
     document.getElementById('shareLocationToggle').addEventListener('change', (e) => {
         if (!currentUser) return;
@@ -1533,41 +1592,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    // جديد: معالجات لأزرار الخصوصية الجديدة
-    document.getElementById('showGenderToggle').addEventListener('change', (e) => {
-        if (!currentUser) return;
-        currentUser.settings.showGender = e.target.checked;
-        socket.emit('updateSettings', { showGender: e.target.checked });
-        alert(`عرض الجنس للأصدقاء: ${e.target.checked ? 'مفعّل' : 'معطل'}.`);
-    });
-
-    document.getElementById('showPhoneToggle').addEventListener('change', (e) => {
-        if (!currentUser) return;
-        currentUser.settings.showPhone = e.target.checked;
-        socket.emit('updateSettings', { showPhone: e.target.checked });
-        alert(`عرض الهاتف للأصدقاء: ${e.target.checked ? 'مفعّل' : 'معطل'}.`);
-    });
-
-    document.getElementById('showEmailToggle').addEventListener('change', (e) => {
-        if (!currentUser) return;
-        currentUser.settings.showEmail = e.target.checked;
-        socket.emit('updateSettings', { showEmail: e.target.checked });
-        alert(`عرض البريد للأصدقاء: ${e.target.checked ? 'مفعّل' : 'معطل'}.`);
-    });
-
-    // جديد: معالجات أزرار المنظور ثلاثي الأبعاد
-    document.getElementById('toggle3DViewBtn').addEventListener('click', () => {
-        map.setPitch(45);
-        map.setBearing(-17.6);
-        alert('تم تفعيل المنظور ثلاثي الأبعاد.');
-    });
-
-    document.getElementById('toggle2DViewBtn').addEventListener('click', () => {
-        map.setPitch(0); // مسطح
-        map.setBearing(0); // شمال أعلى
-        alert('تم تفعيل المنظور ثنائي الأبعاد.');
-    });
 
 }); // نهاية DOMContentLoaded
 // وظائف محاكاة الأصوات
