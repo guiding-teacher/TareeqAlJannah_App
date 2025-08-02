@@ -1,13 +1,17 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طريق الجنة - تحديد المواقع والمراسلة المخصص للعراق</title>
-    <!-- Mapbox GL JS CSS -->
+    <!-- Mapbox GL JS CSS --> 
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
+    <!-- Font Awesome for Icons -->
+
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
@@ -32,26 +36,16 @@
 
     <div id="map"></div>
 
+    <!-- جديد: شريط الدردشة الثابت في الأسفل -->
+    <div id="bottomChatBar" class="bottom-chat-bar">
+        <select id="bottomChatFriendSelect"></select>
+        <input type="text" id="bottomChatInput" placeholder="اكتب رسالتك هنا...">
+        <button id="bottomChatSendBtn"><i class="fas fa-paper-plane"></i></button>
+    </div>
+
+
     <!-- لوحة المعلومات الأولية (تظهر عند بدء التشغيل إذا كانت بيانات المستخدم ناقصة) -->
     <!-- هذه اللوحة يتم إضافتها برمجياً بواسطة script.js لضمان أنها تظهر كأولوية -->
-    <!-- ولكن محتواها سيكون هنا لتسهيل التعديل -->
-    <!--
-    <div class="overlay-panel" id="initialInfoPanel">
-        <h2><i class="fas fa-info-circle"></i> معلوماتك الشخصية</h2>
-        <p>الرجاء إدخال معلوماتك لإنشاء ملفك الشخصي.</p>
-        <input type="text" id="initialInfoNameInput" placeholder="اسمك">
-        <select id="initialInfoGenderSelect">
-            <option value="other">الجنس</option>
-            <option value="male">ذكر</option>
-            <option value="female">أنثى</option>
-        </select>
-        <input type="tel" id="initialInfoPhoneInput" placeholder="رقم هاتفك">
-        <input type="email" id="initialInfoEmailInput" placeholder="بريدك الإلكتروني">
-        <button id="initialInfoConfirmBtn"><i class="fas fa-check-circle"></i> تأكيد</button>
-    </div>
-    -->
-    <!-- ملاحظة: لوحة initialInfoPanel سيتم بناؤها برمجياً في script.js وتضاف إلى body.
-         هذا التعليق هنا فقط لتوضيح محتواها المتوقع. -->
 
     <!-- لوحة الملف الشخصي -->
     <div class="overlay-panel" id="profilePanel">
@@ -87,16 +81,12 @@
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة المراسلة -->
+    <!-- لوحة المراسلة (أصبحت الآن تعرض فقط سجل الدردشة، بينما الإدخال في الشريط السفلي) -->
     <div class="overlay-panel" id="chatPanel">
-        <h2><i class="fas fa-comment-alt"></i> المراسلات</h2>
+        <h2><i class="fas fa-comment-alt"></i> سجل المراسلات</h2>
         <!-- حقل اختيار الصديق سيضاف برمجياً بواسطة JavaScript (setupChatPanel) -->
         <div id="chatMessages">
             <!-- الرسائل ستظهر هنا -->
-        </div>
-        <div class="chat-input-area">
-            <input type="text" id="chatInput" placeholder="اكتب رسالتك...">
-            <button id="sendMessageBtn"><i class="fas fa-paper-plane"></i> إرسال</button>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
@@ -178,24 +168,7 @@
     <!-- لوحة الإعدادات والخصوصية الجديدة -->
     <div class="overlay-panel" id="settingsPanel">
         <h2><i class="fas fa-sliders-h"></i> الإعدادات والخصوصية</h2>
-        <!-- معلومات المستخدم الأساسية القابلة للتعديل -->
-        <div class="feature-section">
-            <h3><i class="fas fa-user-edit"></i> معلومات الملف الشخصي</h3>
-            <label for="settingNameInput">الاسم:</label>
-            <input type="text" id="settingNameInput" placeholder="اسمك">
-            <label for="settingGenderSelect">الجنس:</label>
-            <select id="settingGenderSelect">
-                <option value="other">الجنس</option>
-                <option value="male">ذكر</option>
-                <option value="female">أنثى</option>
-            </select>
-            <label for="settingPhoneInput">رقم الهاتف:</label>
-            <input type="tel" id="settingPhoneInput" placeholder="رقم هاتفك">
-            <label for="settingEmailInput">البريد الإلكتروني:</label>
-            <input type="email" id="settingEmailInput" placeholder="بريدك الإلكتروني">
-            <button id="updateProfileInfoBtn"><i class="fas fa-save"></i> حفظ المعلومات</button>
-        </div>
-
+        <!-- تم نقل معلومات المستخدم إلى لوحة الملف الشخصي -->
         <div class="feature-section">
             <h3><i class="fas fa-phone-alt"></i> رقم الواتساب للطوارئ</h3>
             <p class="feature-info">أدخل رقم هاتف واتساب لإرسال تنبيهات SOS إليه. (مثال: 9647xxxxxxxxxx).</p>
