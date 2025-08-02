@@ -1,3 +1,4 @@
+// server.js
 
 // تحميل متغيرات البيئة من ملف .env
 require('dotenv').config();
@@ -51,7 +52,11 @@ const UserSchema = new mongoose.Schema({
         sound: { type: Boolean, default: true },
         hideBubbles: { type: Boolean, default: false },
         stealthMode: { type: Boolean, default: false },
-        emergencyWhatsapp: { type: String, default: '' } // رقم الواتساب للطوارئ
+        emergencyWhatsapp: { type: String, default: '' }, // رقم الواتساب للطوارئ
+        // جديد: إعدادات مشاركة المعلومات
+        shareGender: { type: Boolean, default: false },
+        sharePhone: { type: Boolean, default: false },
+        shareEmail: { type: Boolean, default: false }
     },
     // جديد: حقول المعلومات الإلزامية
     gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
@@ -185,14 +190,18 @@ io.on('connection', async (socket) => {
                 console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
             } else {
                 // تحديث بيانات المستخدم إذا تم إرسالها
-                if (name && user.name !== name) user.name = name;
-                if (photo && user.photo !== photo) user.photo = photo;
-                if (gender && user.gender !== gender) user.gender = gender; // تحديث الجنس
-                if (phone && user.phone !== phone) user.phone = phone;     // تحديث الهاتف
-                if (email && user.email !== email) user.email = email;     // تحديث البريد
+                if (name !== undefined && user.name !== name) user.name = name;
+                if (photo !== undefined && user.photo !== photo) user.photo = photo;
+                if (gender !== undefined && user.gender !== gender) user.gender = gender; // تحديث الجنس
+                if (phone !== undefined && user.phone !== phone) user.phone = phone;     // تحديث الهاتف
+                if (email !== undefined && user.email !== email) user.email = email;     // تحديث البريد
                 // تحديث رقم الواتساب للطوارئ (إذا تم إرساله وكان مختلفاً)
                 if (emergencyWhatsapp !== undefined && user.settings.emergencyWhatsapp !== emergencyWhatsapp) {
                     user.settings.emergencyWhatsapp = emergencyWhatsapp;
+                }
+                // تحديث إعدادات المشاركة أيضاً
+                if (data.settings) { // إذا تم إرسال إعدادات كاملة، دمجها
+                    user.settings = { ...user.settings, ...data.settings };
                 }
                 user.lastSeen = Date.now();
                 await user.save();
@@ -262,7 +271,10 @@ io.on('connection', async (socket) => {
                                 photo: updatedUser.photo,
                                 location: updatedUser.location.coordinates,
                                 battery: updatedUser.batteryStatus,
-                                settings: updatedUser.settings,
+                                settings: updatedUser.settings, // إرسال جميع إعدادات الخصوصية
+                                gender: updatedUser.gender,     // إرسال الجنس
+                                phone: updatedUser.phone,       // إرسال الهاتف
+                                email: updatedUser.email,       // إرسال البريد
                                 lastSeen: updatedUser.lastSeen
                             });
                         }
@@ -274,6 +286,9 @@ io.on('connection', async (socket) => {
                         location: updatedUser.location.coordinates,
                         battery: updatedUser.batteryStatus,
                         settings: updatedUser.settings,
+                        gender: updatedUser.gender,
+                        phone: updatedUser.phone,
+                        email: updatedUser.email,
                         lastSeen: updatedUser.lastSeen
                     });
                 } else {
@@ -368,6 +383,11 @@ io.on('connection', async (socket) => {
         try {
             // دمج الإعدادات الجديدة مع الإعدادات الموجودة
             user.settings = { ...user.settings, ...data };
+            // يمكن أيضاً تحديث البيانات الأساسية للمستخدم هنا إذا كانت في نفس الطلب (غير مطلوب حالياً)
+            // if (data.gender !== undefined) user.gender = data.gender;
+            // if (data.phone !== undefined) user.phone = data.phone;
+            // if (data.email !== undefined) user.email = data.email;
+
             await user.save();
             console.log(`⚙️ تم تحديث إعدادات ${user.name}:`, user.settings);
 
@@ -385,6 +405,9 @@ io.on('connection', async (socket) => {
                                 location: user.location.coordinates,
                                 battery: user.batteryStatus,
                                 settings: user.settings,
+                                gender: user.gender, // إرسال الجنس
+                                phone: user.phone,   // إرسال الهاتف
+                                email: user.email,   // إرسال البريد
                                 lastSeen: user.lastSeen
                             });
                         }
@@ -396,6 +419,9 @@ io.on('connection', async (socket) => {
                         location: user.location.coordinates,
                         battery: user.batteryStatus,
                         settings: user.settings,
+                        gender: user.gender,
+                        phone: user.phone,
+                        email: user.email,
                         lastSeen: user.lastSeen
                     });
                 }
