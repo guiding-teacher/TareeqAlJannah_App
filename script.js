@@ -6,10 +6,10 @@ mapboxgl.setRTLTextPlugin(
     true
   );
 
+// script.js
 
 // ====== إعدادات Mapbox ======
-// تأكد من أن هذا المفتاح صحيح!
-mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
+mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS-FupIeJ7BGxAXOlEw';
 
 const map = new mapboxgl.Map({
     container: 'map',
@@ -27,51 +27,19 @@ const friendMarkers = {}; // لتخزين مركبات الأصدقاء دينا
 const poiMarkers = {}; // لتخزين مركبات نقاط الاهتمام
 let currentHistoricalPathLayer = null; // لتتبع طبقة المسار التاريخي المعروضة
 let currentChatFriendId = null; // معرف الصديق الذي تتم الدردشة معه حاليا
+let activeMessageTimers = {}; // جديد: لتتبع مؤقتات فقاعات الرسائل
 
 
 // المواقع الرئيسية في العراق (من الصورة + إضافات جديدة)
 const holySites = [
-    // مناطق الجنوب (البصرة، الفاو، الناصرية)
-    { name: 'الفاو', coords: [48.4729, 29.9866], icon: '<i class="fas fa-ship"></i>' },
-    { name: 'البصرة', coords: [47.8100, 30.5000], icon: '<i class="fas fa-city"></i>' },
-    { name: 'حمدان', coords: [47.8800, 30.5500], icon: '<i class="fas fa-map-marker-alt"></i>' }, // جديد
-    { name: 'الكزيزة', coords: [47.9500, 30.6000], icon: '<i class="fas fa-map-marker-alt"></i>' }, // جديد
-    { name: 'الكرمة', coords: [48.0200, 30.6500], icon: '<i class="fas fa-map-marker-alt"></i>' }, // جديد
-    { name: 'الهارثة', coords: [48.0900, 30.7000], icon: '<i class="fas fa-map-marker-alt"></i>' }, // جديد
-    { name: 'الدير', coords: [48.1600, 30.7500], icon: '<i class="fas fa-map-marker-alt"></i>' }, // جديد
-    { name: 'القرنة', coords: [48.2300, 30.8000], icon: '<i class="fas fa-map-marker-alt"></i>' }, // جديد
-    { name: 'المدينة', coords: [48.3000, 30.8500], icon: '<i class="fas fa-map-marker-alt"></i>' }, // جديد
-    { name: 'كرمة بني سعيد', coords: [46.0000, 30.5000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'ناصرية تقاطع او', coords: [45.9000, 30.6000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'طاقة كهرباء', coords: [45.8000, 30.7000], icon: '<i class="fas fa-lightbulb"></i>' },
-    { name: 'البطاحة', coords: [45.7000, 30.8000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الهويشلي', coords: [45.6000, 30.9000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الدراجي', coords: [45.5000, 31.0000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'المجر', coords: [45.4000, 31.1000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الورقاء', coords: [45.3000, 31.2000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'السماوة', coords: [45.2831, 31.3060], icon: '<i class="fas fa-city"></i>' },
-    { name: 'الخضر', coords: [45.2000, 31.4000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الرميثة', coords: [45.1000, 31.5000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الطابو', coords: [45.0000, 31.6000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الحمزة', coords: [44.8000, 31.5000], icon: '<i class="fas fa-map-pin"></i>' },
-    { name: 'الشافية', coords: [44.9000, 31.7000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الديوانية', coords: [45.1000, 31.9800], icon: '<i class="fas fa-city"></i>' },
-    { name: 'السنية', coords: [44.6000, 31.8500], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الطلبعة', coords: [44.5500, 31.9000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'القاسم', coords: [44.4000, 32.0000], icon: '<i class="fas fa-map-pin"></i>' },
-    { name: 'الهاشميات', coords: [44.5000, 32.1000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الجربوعية', coords: [44.4000, 32.2000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'المهمازية', coords: [44.3000, 32.4000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'الحلة', coords: [44.4079, 32.4820], icon: '<i class="fas fa-city"></i>' },
-    { name: 'أبو غرق', coords: [44.2500, 32.5500], icon: '<i class="fas fa-road"></i>' },
-    { name: 'أطويريج', coords: [44.1500, 32.6000], icon: '<i class="fas fa-road"></i>' },
-    { name: 'كربلاء المقدسة', coords: [44.0329, 32.6163], icon: '<i class="fas fa-mosque"></i>' },
-    { name: 'الكوفة', coords: [44.3824, 32.0308], icon: '<i class="fas fa-landmark"></i>' },
-    { name: 'النجف الأشرف', coords: [44.3312, 31.9961], icon: '<i class="fas fa-mosque"></i>' }
+    // تم حذف المواقع بناءً على طلبك
+    // يمكنك إضافة نقاط مهمة هنا إذا أردت
 ];
 
 // تأكد من تحديث هذا الرابط إلى رابط خدمة Render الخاصة بك
-const socket = io('https://tareeqaljannah-app.onrender.com'); // مثال: استبدل هذا بعنوان URL الصحيح من Render
+// const socket = io('http://localhost:3000'); // للتجربة المحلية
+const socket = io('https://tareeq-aljannah-backend.onrender.com'); // للنسخة المنشورة
+
 
 // ====== وظائف عامة للواجهة الرسومية (UI Helpers) ======
 
@@ -158,6 +126,12 @@ function createCustomMarker(user) {
 }
 
 function showFriendDetailsPopup(friend) {
+    // إزالة أي PopUp سابق لنفس المركر لضمان عدم التكرار
+    const existingPopup = friendMarkers[friend.userId]?._popup;
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+    
     // تحقق أدق من توفر بيانات الموقع الحقيقية لك وللصديق
     const currentUserHasValidLocation = currentUser && currentUser.location && currentUser.location.coordinates && (currentUser.location.coordinates[0] !== 0 || currentUser.location.coordinates[1] !== 0);
     const friendHasValidLocation = friend && friend.location && friend.location.coordinates && (friend.location.coordinates[0] !== 0 || friend.location.coordinates[1] !== 0);
@@ -199,12 +173,6 @@ function showFriendDetailsPopup(friend) {
             <button id="chatFriendBtn-${friend.userId}" class="chat-friend-btn"><i class="fas fa-comments"></i> دردشة</button>
         </div>
     `;
-
-    // إزالة أي PopUp سابق لنفس المركر لضمان عدم التكرار
-    const existingPopup = friendMarkers[friend.userId]?._popup;
-    if (existingPopup) {
-        existingPopup.remove();
-    }
 
     const popup = new mapboxgl.Popup({ offset: 25 })
         .setLngLat(friend.location.coordinates)
@@ -336,16 +304,16 @@ function showFriendsMap() {
 
     if (currentUser && currentUser.location && currentUser.location.coordinates && !currentUser.settings.stealthMode && currentUser.settings.shareLocation) {
         createCustomMarker(currentUser);
-        // عند الدخول لخريطة الأصدقاء، لا تغادر الخريطة موقع المستخدم/الأصدقاء، ركز عليهم
-        // map.flyTo({ center: currentUser.location.coordinates, zoom: 12, pitch: 45, bearing: -17.6 });
         
         // جديد: مركز الخريطة على المستخدمين المرتبطين
         if (linkedFriends.length > 0) {
-            const allCoords = [currentUser.location.coordinates, ...linkedFriends.map(f => f.location.coordinates).filter(Boolean)];
-            if (allCoords.length > 0) {
+            const allCoords = [currentUser.location.coordinates, ...linkedFriends.map(f => f.location?.coordinates).filter(Boolean)];
+            if (allCoords.length > 1) { // فقط إذا كان هناك أكثر من نقطة
                 const bounds = new mapboxgl.LngLatBounds();
                 allCoords.forEach(coord => bounds.extend(coord));
                 map.fitBounds(bounds, { padding: 50, pitch: 45, bearing: -17.6 });
+            } else if (allCoords.length === 1) { // إذا كان المستخدم هو النقطة الوحيدة
+                map.flyTo({ center: allCoords[0], zoom: 12, pitch: 45, bearing: -17.6 });
             }
         } else {
             map.flyTo({ center: currentUser.location.coordinates, zoom: 12, pitch: 45, bearing: -17.6 });
@@ -379,43 +347,17 @@ function showFriendsMap() {
 
 function drawGeneralPaths() {
     const pathCoordinates = [
-        holySites.find(s => s.name === 'الفاو')?.coords,
-        holySites.find(s => s.name === 'البصرة')?.coords,
-        holySites.find(s => s.name === 'حمدان')?.coords,
-        holySites.find(s => s.name === 'الكزيزة')?.coords,
-        holySites.find(s => s.name === 'الكرمة')?.coords,
-        holySites.find(s => s.name === 'الهارثة')?.coords,
-        holySites.find(s => s.name === 'الدير')?.coords,
-        holySites.find(s => s.name === 'القرنة')?.coords,
-        holySites.find(s => s.name === 'المدينة')?.coords,
-        holySites.find(s => s.name === 'كرمة بني سعيد')?.coords,
-        holySites.find(s => s.name === 'ناصرية تقاطع او')?.coords,
-        holySites.find(s => s.name === 'طاقة كهرباء')?.coords,
-        holySites.find(s => s.name === 'البطاحة')?.coords,
-        holySites.find(s => s.name === 'الهويشلي')?.coords,
-        holySites.find(s => s.name === 'الدراجي')?.coords,
-        holySites.find(s => s.name === 'المجر')?.coords,
-        holySites.find(s => s.name === 'الورقاء')?.coords,
-        holySites.find(s => s.name === 'السماوة')?.coords,
-        holySites.find(s => s.name === 'الخضر')?.coords,
-        holySites.find(s => s.name === 'الرميثة')?.coords,
-        holySites.find(s => s.name === 'الطابو')?.coords,
-        holySites.find(s => s.name === 'الحمزة')?.coords,
-        holySites.find(s => s.name === 'الشافية')?.coords,
-        holySites.find(s => s.name === 'الديوانية')?.coords,
-        holySites.find(s => s.name === 'السنية')?.coords,
-        holySites.find(s => s.name === 'الطلبعة')?.coords,
-        holySites.find(s => s.name === 'القاسم')?.coords,
-        holySites.find(s => s.name === 'الهاشميات')?.coords,
-        holySites.find(s => s.name === 'الجربوعية')?.coords,
-        holySites.find(s => s.name === 'المهمازية')?.coords,
-        holySites.find(s => s.name === 'الحلة')?.coords,
-        holySites.find(s => s.name === 'أبو غرق')?.coords,
-        holySites.find(s => s.name === 'أطويريج')?.coords,
-        holySites.find(s => s.name === 'كربلاء المقدسة')?.coords,
-        holySites.find(s => s.name === 'الكوفة')?.coords,
-        holySites.find(s => s.name === 'النجف الأشرف')?.coords
-    ].filter(Boolean); // لتصفية أي قيم undefined إذا لم يتم العثور على موقع بالاسم
+        // تم حذف المواقع بناءً على طلبك
+    ].filter(Boolean); // لتصفية أي قيم undefined
+
+    if (pathCoordinates.length < 2) {
+        if (map.getSource('general-paths')) {
+            map.removeLayer('general-paths');
+            map.removeSource('general-paths');
+        }
+        return;
+    }
+
 
     const geojson = {
         'type': 'Feature',
@@ -587,12 +529,11 @@ function startLocationTracking() {
         },
         (error) => {
             console.error("خطأ في تحديد الموقع:", error);
-            // قد تظهر رسالة الخطأ هذه إذا رفض المستخدم إذن الموقع
         },
         {
-            enableHighAccuracy: true, // طلب أعلى دقة ممكنة
-            timeout: 10000,         // مهلة 10 ثوانٍ (للحصول على الموقع)
-            maximumAge: 0           // عدم استخدام مواقع قديمة مخبأة
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
         }
     );
 }
@@ -671,17 +612,25 @@ function addChatMessage(senderName, messageText, type = '', timestamp = new Date
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// دالة عرض فقاعة الرسالة
+// دالة عرض فقاعة الرسالة (مع تحديثات)
 function showMessageBubble(userId, messageText) {
     const bubble = document.getElementById(`msg-bubble-${userId}`);
     if (bubble) {
+        // إذا كان هناك مؤقت قديم لنفس المستخدم، قم بإلغائه
+        if (activeMessageTimers[userId]) {
+            clearTimeout(activeMessageTimers[userId]);
+        }
+        
         bubble.textContent = messageText;
         bubble.classList.add('show');
-        setTimeout(() => {
+        
+        // تعيين مؤقت جديد لإخفاء الفقاعة بعد 30 ثانية
+        activeMessageTimers[userId] = setTimeout(() => {
             bubble.classList.remove('show');
-        }, 3000);
+        }, 30000); // 30 ثانية
     }
 }
+
 
 // دالة تحديث حالة بطارية الأصدقاء في لوحة الميزات
 function updateFriendBatteryStatus() {
@@ -761,6 +710,41 @@ function handleChatFriendChange(e) {
     socket.emit('requestChatHistory', { friendId: currentChatFriendId });
 }
 
+// جديد: دالة لإعداد شريط الدردشة السفلي
+function setupBottomChatBar() {
+    const bottomChatBar = document.getElementById('bottomChatBar');
+    const bottomChatFriendSelect = document.getElementById('bottomChatFriendSelect');
+    
+    if (linkedFriends.length > 0) {
+        bottomChatFriendSelect.innerHTML = '';
+        linkedFriends.forEach(friend => {
+            const option = document.createElement('option');
+            option.value = friend.userId;
+            option.textContent = friend.name;
+            bottomChatFriendSelect.appendChild(option);
+        });
+        
+        // تحديد أول صديق كافتراضي
+        currentChatFriendId = linkedFriends[0].userId;
+        bottomChatFriendSelect.value = currentChatFriendId;
+        
+        bottomChatBar.classList.add('active');
+    } else {
+        bottomChatBar.classList.remove('active');
+        currentChatFriendId = null;
+    }
+
+    bottomChatFriendSelect.removeEventListener('change', (e) => {
+        currentChatFriendId = e.target.value;
+    });
+    bottomChatFriendSelect.addEventListener('change', (e) => {
+        currentChatFriendId = e.target.value;
+    });
+}
+// ====== التعامل مع أحداث WebSocket من الخادم ======
+
+// script.js (تكملة)
+
 // ====== التعامل مع أحداث WebSocket من الخادم ======
 
 // 0. تسجيل المستخدم عند الاتصال لأول مرة
@@ -838,7 +822,7 @@ socket.on('locationUpdate', (data) => {
     if (data.userId === currentUser.userId) {
         currentUser.location = data.location;
         currentUser.battery = data.battery;
-        currentUser.batteryStatus = data.battery;
+        currentUser.batteryStatus = data.battery; // للتوافق
         currentUser.settings = data.settings;
         currentUser.lastSeen = data.lastSeen;
         currentUser.gender = data.gender; // تحديث بيانات المستخدم
@@ -850,7 +834,7 @@ socket.on('locationUpdate', (data) => {
         if (userToUpdate) {
             userToUpdate.location = data.location;
             userToUpdate.battery = data.battery;
-            userToUpdate.batteryStatus = data.battery;
+            userToUpdate.batteryStatus = data.battery; // للتوافق
             userToUpdate.settings = data.settings;
             userToUpdate.lastSeen = data.lastSeen;
             userToUpdate.gender = data.gender; // تحديث بيانات الصديق
@@ -923,6 +907,7 @@ socket.on('updateFriendsList', (friendsData) => {
     console.log('تم تحديث قائمة الأصدقاء:', linkedFriends);
 
     showFriendsMap(); // إعادة رسم الخريطة لإظهار الأصدقاء الجدد
+    setupBottomChatBar(); // تحديث شريط الدردشة السفلي بعد تحديث قائمة الأصدقاء
 
     // إذا كانت لوحة الأصدقاء مفتوحة، قم بتحديث قائمتها
     if (document.getElementById('connectPanel').classList.contains('active')) {
@@ -957,10 +942,6 @@ socket.on('updateFriendsList', (friendsData) => {
 });
 
 socket.on('newChatMessage', (data) => {
-    // تحديث لوحة الدردشة فقط إذا كانت هذه الرسالة تخص المحادثة الحالية
-    if (currentUser && data.receiverId === currentUser.userId && data.senderId === currentChatFriendId) {
-        addChatMessage(data.senderName, data.message, 'received', data.timestamp);
-    }
     // عرض فقاعة الرسالة دائماً (إذا لم يكن المستخدم قد قام بإخفائها)
     if (!currentUser.settings.hideBubbles) {
         showMessageBubble(data.senderId, data.message);
@@ -968,6 +949,10 @@ socket.on('newChatMessage', (data) => {
     // تشغيل الصوت إذا كانت الأصوات مفعلة
     if (currentUser.settings.sound) {
         playNotificationSound();
+    }
+    // تحديث لوحة الدردشة فقط إذا كانت هذه الرسالة تخص المحادثة الحالية ومفتوحة
+    if (currentUser && data.receiverId === currentUser.userId && data.senderId === currentChatFriendId && document.getElementById('chatPanel').classList.contains('active')) {
+        addChatMessage(data.senderName, data.message, 'received', data.timestamp);
     }
 });
 
@@ -1009,6 +994,8 @@ socket.on('historicalPathData', (data) => {
             const coordinates = data.path.map(loc => loc.location.coordinates);
             drawHistoricalPath(data.userId, coordinates);
             alert(`تم عرض المسار التاريخي لـ ${data.userId}.`);
+            // إخفاء لوحة الميزات بعد عرض المسار
+            document.getElementById('featuresPanel').classList.remove('active');
         } else {
             alert(`لا توجد بيانات مسار تاريخي لـ ${data.userId} في هذا النطاق.`);
         }
@@ -1093,7 +1080,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             initialInfoPanel.classList.remove('active'); // إخفاء اللوحة
             alert('تم حفظ معلوماتك بنجاح!');
-            // لا نحتاج لاستدعاء showGeneralMap هنا، لأن currentUserData ستعيد تحميل التطبيق
         } else {
             alert('الرجاء ملء جميع الحقول المطلوبة (الاسم، الجنس، الهاتف، البريد الإلكتروني).');
         }
@@ -1112,12 +1098,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateNameBtn.innerHTML = '<i class="fas fa-save"></i> حفظ الاسم';
         updateNameBtn.id = 'updateUserNameBtn';
         profileInfoDiv.appendChild(updateNameBtn);
-
-        // جديد: زر نسخ رمز الربط
-        const copyLinkCodeBtn = document.createElement('button');
-        copyLinkCodeBtn.innerHTML = '<i class="fas fa-copy"></i> نسخ رمز الربط';
-        copyLinkCodeBtn.id = 'copyLinkCodeBtn';
-        profileInfoDiv.appendChild(copyLinkCodeBtn);
 
         // ربط معالج الحدث لزر حفظ الاسم
         updateNameBtn.addEventListener('click', () => {
@@ -1143,7 +1123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // ربط معالج الحدث لزر نسخ رمز الربط
-        copyLinkCodeBtn.addEventListener('click', () => {
+        document.getElementById('copyLinkCodeBtn').addEventListener('click', () => {
             const linkCode = document.getElementById('userLinkCode').textContent;
             if (linkCode) {
                 navigator.clipboard.writeText(linkCode).then(() => {
@@ -1160,6 +1140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. إضافة زر "إضافة استراحة" (مع حقل اختيار أيقونة) في لوحة الميزات
     const featuresPanel = document.getElementById('featuresPanel');
     if (featuresPanel) {
+        // البحث عن قسم نقاط الاهتمام (POI) بشكل أدق
         const poiSectionTitle = featuresPanel.querySelector('.feature-section h3:has(.fa-map-marker-alt)');
         if (poiSectionTitle) {
             const poiContainer = poiSectionTitle.closest('.feature-section');
@@ -1276,37 +1257,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         }
-
-        // جديد: قسم التحكم بـ 3D الخريطة
-        const map3DControlSection = featuresPanel.querySelector('.feature-section h3:has(.fa-globe-africa)').closest('.feature-section');
-        if (map3DControlSection) {
-            const mapPitchInput = document.getElementById('mapPitch');
-            const mapBearingInput = document.getElementById('mapBearing');
-
-            mapPitchInput.addEventListener('input', (e) => {
-                map.setPitch(e.target.value);
-            });
-            mapBearingInput.addEventListener('input', (e) => {
-                map.setBearing(e.target.value);
-            });
-        }
     }
 
-    // 4. إضافة عنصر اختيار الصديق في لوحة الدردشة (هذا يتم إنشاؤه في الجزء 1 من script.js)
-    // الآن، فقط تأكد من ربط معالج الأحداث لزر الدردشة بعد DOMContentLoaded
-    document.getElementById('showChatBtn').addEventListener('click', () => {
-        if (!currentUser) {
-            alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
-            return;
+    // 4. إضافة عنصر اختيار الصديق في لوحة الدردشة (التي سيتم تعديلها في index.html)
+    const chatPanel = document.getElementById('chatPanel');
+    if (chatPanel) {
+        const chatMessagesDiv = document.getElementById('chatMessages'); // الرسائل
+        
+        // إنشاء عنصر الـ select الجديد
+        const chatFriendSelectContainer = document.createElement('div');
+        chatFriendSelectContainer.className = 'chat-header';
+        chatFriendSelectContainer.style = "margin-bottom: 10px;";
+        chatFriendSelectContainer.innerHTML = `
+            <label for="chatFriendSelect" style="display: block; margin-bottom: 5px; color: #555;">الدردشة مع:</label>
+            <select id="chatFriendSelect" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;"></select>
+        `;
+        
+        // إضافة الـ select قبل منطقة الرسائل
+        // يجب أن يتم إدراجها قبل chatMessagesDiv
+        if(chatMessagesDiv && chatMessagesDiv.parentNode) {
+            chatMessagesDiv.parentNode.insertBefore(chatFriendSelectContainer, chatMessagesDiv);
         }
-        if (linkedFriends.length === 0) {
-            alert("الرجاء ربط صديق أولاً لبدء الدردشة.");
-            return;
-        }
-        togglePanel('chatPanel');
-        showFriendsMap();
-        setupChatPanel(); // استدعاء دالة إعداد لوحة الدردشة الجديدة
-    });
+
+        // ربط معالج حدث لزر الدردشة لتهيئة اللوحة
+        document.getElementById('showChatBtn').addEventListener('click', () => {
+            if (!currentUser) {
+                alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
+                return;
+            }
+            if (linkedFriends.length === 0) {
+                alert("الرجاء ربط صديق أولاً لبدء الدردشة.");
+                return;
+            }
+            togglePanel('chatPanel');
+            showFriendsMap();
+            setupChatPanel(); // استدعاء دالة إعداد لوحة الدردشة الجديدة
+        });
+    }
 
 
     // 5. ربط معالجات الأحداث للأزرار الرئيسية (بعد التأكد من وجودها في DOM)
@@ -1405,10 +1392,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('sendMessageBtn').addEventListener('click', sendMessage);
-    document.getElementById('chatInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
+    // معالج زر الإرسال في الشريط السفلي الجديد
+    document.getElementById('bottomChatSendBtn').addEventListener('click', () => {
+        const bottomChatInput = document.getElementById('bottomChatInput');
+        const bottomChatFriendSelect = document.getElementById('bottomChatFriendSelect');
+        const messageText = bottomChatInput.value.trim();
+        const receiverId = bottomChatFriendSelect.value;
+        
+        if (!currentUser) return;
+        if (!receiverId) {
+            alert("الرجاء اختيار صديق من القائمة للدردشة معه.");
+            return;
+        }
+        if (messageText) {
+            addChatMessage(currentUser.name, messageText, 'sent', new Date());
+
+            socket.emit('chatMessage', {
+                senderId: currentUser.userId,
+                receiverId: receiverId,
+                message: messageText
+            });
+
+            if (currentUser.settings.sound) playNotificationSound();
+            if (!currentUser.settings.hideBubbles) showMessageBubble(currentUser.userId, messageText);
+            
+            bottomChatInput.value = '';
+        } else {
+            alert("الرسالة فارغة.");
         }
     });
 
