@@ -9,7 +9,7 @@ mapboxgl.setRTLTextPlugin(
 // script.js
 
 // ====== إعدادات Mapbox ======
-mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS-FupIeJ7BGxAXOlEw';
+mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
 
 const map = new mapboxgl.Map({
     container: 'map',
