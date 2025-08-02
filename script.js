@@ -100,7 +100,7 @@ function createCustomMarker(user) {
     }
 
     // استخدم الصورة الافتراضية إذا كانت صورة المستخدم غير متوفرة أو فارغة
-    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER';
+    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'https://th.bing.com/th/id/R.4b8f0104a86b93a87ddc1f8977add062?rik=bqbSLsa3fXGXTQ&riu=http%3a%2f%2fi37.servimg.com%2fu%2ff37%2f19%2f18%2f59%2f67%2f15129711.jpg&ehk=nnAfWchSmuoAA8Js4goIsa5QnRANa%2ftDu95Mo%2bnyFV8%3d&risl=&pid=ImgRaw&r=0';
 
     el.innerHTML = `
         <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}">
