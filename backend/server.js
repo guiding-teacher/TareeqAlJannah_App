@@ -7,7 +7,8 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const mongoose = require('mongoose'); // استيراد Mongoose
+const mongoose = require('mongoose');
+const axios = require('axios'); // لجلب أوقات الصلاة
 
 const app = express();
 const server = http.createServer(app);
@@ -20,7 +21,6 @@ const io = new socketIo.Server(server, {
 });
 
 // ====== الاتصال بقاعدة بيانات MongoDB ======
-// استخدام متغير البيئة لعنوان قاعدة البيانات
 const DB_URI = process.env.DB_URI || 'mongodb://localhost:27017/tareeq_aljannah';
 mongoose.connect(DB_URI)
 .then(() => console.log('✅ تم الاتصال بقاعدة بيانات MongoDB بنجاح!'))
@@ -35,15 +35,15 @@ const UserSchema = new mongoose.Schema({
     name: { type: String, required: true },
     photo: { type: String, default: 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER' },
     linkCode: { type: String, unique: true, sparse: true },
-    location: { // آخر موقع معروف للمستخدم (بتنسيق GeoJSON Point)
+    location: {
         type: {
             type: String,
             enum: ['Point'],
             default: 'Point'
         },
-        coordinates: { // [longitude, latitude]
+        coordinates: {
             type: [Number],
-            required: true // يجب أن تكون الإحداثيات موجودة
+            required: true
         }
     },
     linkedFriends: [{ type: String }],
@@ -52,19 +52,26 @@ const UserSchema = new mongoose.Schema({
         sound: { type: Boolean, default: true },
         hideBubbles: { type: Boolean, default: false },
         stealthMode: { type: Boolean, default: false },
-        emergencyWhatsapp: { type: String, default: '' } // رقم الواتساب للطوارئ
+        emergencyWhatsapp: { type: String, default: '' }
     },
-    // جديد: حقول المعلومات الإلزامية
     gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
     phone: { type: String, default: '' },
     email: { type: String, default: '' },
-    // نهاية الحقول الجديدة
     batteryStatus: { type: String, default: 'N/A' },
-    lastSeen: { type: Date, default: Date.now }
+    lastSeen: { type: Date, default: Date.now },
+    // حفظ نقاط الاهتمام التي أنشأها المستخدم
+    createdPOIs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CommunityPOI' }],
+    // حفظ نقطة التجمع الخاصة بالمستخدم
+    meetingPoint: {
+        name: { type: String },
+        location: {
+            type: { type: String, enum: ['Point'], default: 'Point' },
+            coordinates: { type: [Number] }
+        }
+    }
 }, { timestamps: true });
 
 UserSchema.index({ location: '2dsphere' });
-
 const User = mongoose.model('User', UserSchema);
 
 
@@ -75,24 +82,17 @@ const MessageSchema = new mongoose.Schema({
     message: { type: String, required: true },
     timestamp: { type: Date, default: Date.now }
 });
-
-// جديد: TTL index لحذف الرسائل تلقائياً بعد 24 ساعة (86400 ثانية)
 MessageSchema.index({ "timestamp": 1 }, { expireAfterSeconds: 86400 });
-
 const Message = mongoose.model('Message', MessageSchema);
 
 
-// 3. نموذج المواقع المقدسة (Holy Site Model - ثابتة من الصورة)
+// 3. نموذج المواقع المقدسة (Holy Site Model)
 const HolySiteSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
-    coords: {
-        type: [Number],
-        required: true
-    },
+    coords: { type: [Number], required: true },
     icon: { type: String },
     description: { type: String }
 });
-
 const HolySite = mongoose.model('HolySite', HolySiteSchema);
 
 
@@ -100,22 +100,13 @@ const HolySite = mongoose.model('HolySite', HolySiteSchema);
 const HistoricalLocationSchema = new mongoose.Schema({
     userId: { type: String, required: true, index: true },
     location: {
-        type: {
-            type: String,
-            enum: ['Point'],
-            default: 'Point'
-        },
-        coordinates: {
-            type: [Number],
-            required: true
-        }
+        type: { type: String, enum: ['Point'], default: 'Point' },
+        coordinates: { type: [Number], required: true }
     },
     timestamp: { type: Date, default: Date.now }
 });
-
 HistoricalLocationSchema.index({ userId: 1, timestamp: -1 });
 HistoricalLocationSchema.index({ location: '2dsphere' });
-
 const HistoricalLocation = mongoose.model('HistoricalLocation', HistoricalLocationSchema);
 
 
@@ -123,56 +114,64 @@ const HistoricalLocation = mongoose.model('HistoricalLocation', HistoricalLocati
 const CommunityPOISchema = new mongoose.Schema({
     name: { type: String, required: true },
     description: { type: String },
-    category: { type: String, enum: ['Rest Area', 'Medical Post', 'Food Station', 'Other'], default: 'Rest Area' },
+    // إضافة فئات جديدة
+    category: { type: String, enum: ['Rest Area', 'Medical Post', 'Food Station', 'Water', 'Mosque', 'Parking', 'Info', 'Other'], default: 'Other' },
     location: {
-        type: {
-            type: String,
-            enum: ['Point'],
-            default: 'Point'
-        },
-        coordinates: {
-            type: [Number],
-            required: true
-        }
+        type: { type: String, enum: ['Point'], default: 'Point' },
+        coordinates: { type: [Number], required: true }
     },
     createdBy: { type: String, required: true },
-    isApproved: { type: Boolean, default: true }, // تغيير مؤقت: اجعلها true لكي تظهر مباشرة
-    icon: { type: String, default: '<i class="fas fa-map-marker-alt"></i>' }, // أيقونة خاصة بالنقطة
+    isApproved: { type: Boolean, default: true },
+    icon: { type: String, default: '<i class="fas fa-map-marker-alt"></i>' },
     likes: [{ type: String }],
     dislikes: [{ type: String }],
 }, { timestamps: true });
-
 CommunityPOISchema.index({ location: '2dsphere' });
-
 const CommunityPOI = mongoose.model('CommunityPOI', CommunityPOISchema);
 
-// 6. نموذج المجموعة (Group Model) - هيكل مبدئي فقط للميزة المعقدة
+
+// 6. نموذج المجموعة (Group Model)
 const GroupSchema = new mongoose.Schema({
     groupName: { type: String, required: true, unique: true },
-    adminId: { type: String, required: true }, // userId لمن أنشأ المجموعة
-    members: [{ type: String }], // userIds للأعضاء
+    adminId: { type: String, required: true },
+    members: [{ type: String }],
     createdAt: { type: Date, default: Date.now }
 });
 const Group = mongoose.model('Group', GroupSchema);
 
+// 7. نموذج المعزب (Moazeb Model)
+const MoazebSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    address: { type: String, required: true },
+    phone: { type: String, required: true, index: true },
+    governorate: { type: String, required: true, index: true },
+    district: { type: String, required: true, index: true },
+    location: {
+        type: { type: String, enum: ['Point'], default: 'Point' },
+        coordinates: { type: [Number], required: true }
+    },
+    createdBy: { type: String, required: true },
+}, { timestamps: true });
+MoazebSchema.index({ location: '2dsphere' });
+const Moazeb = mongoose.model('Moazeb', MoazebSchema);
+
 
 // ====== إعدادات Express ======
-app.use(express.static(path.join(__dirname, '../'))); // لخدمة ملفات الواجهة الأمامية من المجلد الأب
+app.use(express.static(path.join(__dirname, '../')));
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
 });
 
-// قائمة لمتابعة المستخدمين المتصلين حالياً ومعرفات Socket الخاصة بهم
-const connectedUsers = {}; // { userId: socket.id }
+const connectedUsers = {};
 
 // ====== منطق Socket.IO (التعامل مع اتصالات في الوقت الفعلي) ======
 io.on('connection', async (socket) => {
     console.log(`📡 مستخدم جديد متصل: ${socket.id}`);
 
-    let user; // تعريف متغير user هنا ليكون متاحاً في نطاق socket
+    let user;
 
     socket.on('registerUser', async (data) => {
-        const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data; // استقبال الحقول الجديدة
+        const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
 
         try {
             user = await User.findOne({ userId: userId });
@@ -182,25 +181,23 @@ io.on('connection', async (socket) => {
                     userId: userId,
                     name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
                     photo: photo || 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER',
-                    location: { type: 'Point', coordinates: [0, 0] }, // موقع افتراضي [0,0]
+                    location: { type: 'Point', coordinates: [0, 0] },
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
-                    settings: { // تعيين إعدادات الطوارئ عند الإنشاء
+                    settings: {
                         emergencyWhatsapp: emergencyWhatsapp || ''
                     },
-                    gender: gender || 'other', // حفظ الجنس
-                    phone: phone || '', // حفظ رقم الهاتف
-                    email: email || '' // حفظ البريد الإلكتروني
+                    gender: gender || 'other',
+                    phone: phone || '',
+                    email: email || ''
                 });
                 await user.save();
                 console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
             } else {
-                // تحديث بيانات المستخدم إذا تم إرسالها
                 if (name && user.name !== name) user.name = name;
                 if (photo && user.photo !== photo) user.photo = photo;
-                if (gender && user.gender !== gender) user.gender = gender; // تحديث الجنس
-                if (phone && user.phone !== phone) user.phone = phone;     // تحديث الهاتف
-                if (email && user.email !== email) user.email = email;     // تحديث البريد
-                // تحديث رقم الواتساب للطوارئ (إذا تم إرساله وكان مختلفاً)
+                if (gender && user.gender !== gender) user.gender = gender;
+                if (phone && user.phone !== phone) user.phone = phone;
+                if (email && user.email !== email) user.email = email;
                 if (emergencyWhatsapp !== undefined && user.settings.emergencyWhatsapp !== emergencyWhatsapp) {
                     user.settings.emergencyWhatsapp = emergencyWhatsapp;
                 }
@@ -227,7 +224,6 @@ io.on('connection', async (socket) => {
         }
     });
 
-
     socket.on('updateLocation', async (data) => {
         if (!socket.userId || !data.location) return;
 
@@ -244,7 +240,6 @@ io.on('connection', async (socket) => {
 
             if (updatedUser) {
                 if (updatedUser.settings.shareLocation && !updatedUser.settings.stealthMode) {
-                    // لا تسجل مواقع [0,0] في السجل التاريخي
                     if (updatedUser.location.coordinates[0] !== 0 || updatedUser.location.coordinates[1] !== 0) {
                         const newHistoricalLocation = new HistoricalLocation({
                             userId: updatedUser.userId,
@@ -255,32 +250,9 @@ io.on('connection', async (socket) => {
                             timestamp: Date.now()
                         });
                         await newHistoricalLocation.save();
-                        // console.log(`💾 تم حفظ موقع تاريخي لـ ${updatedUser.name}`);
                     }
 
-                    console.log(`📍 تم تحديث موقع ${updatedUser.name}: ${updatedUser.location.coordinates}`);
-
-                    const friendsOfCurrentUser = await User.find({
-                        userId: { $in: updatedUser.linkedFriends }
-                    });
-
-                    friendsOfCurrentUser.forEach(friend => {
-                        if (connectedUsers[friend.userId]) {
-                            io.to(connectedUsers[friend.userId]).emit('locationUpdate', {
-                                userId: updatedUser.userId,
-                                name: updatedUser.name,
-                                photo: updatedUser.photo,
-                                location: updatedUser.location.coordinates,
-                                battery: updatedUser.batteryStatus,
-                                settings: updatedUser.settings,
-                                lastSeen: updatedUser.lastSeen,
-                                gender: updatedUser.gender, // جديد
-                                phone: updatedUser.phone,     // جديد
-                                email: updatedUser.email      // جديد
-                            });
-                        }
-                    });
-                    socket.emit('locationUpdate', {
+                    const locationData = {
                         userId: updatedUser.userId,
                         name: updatedUser.name,
                         photo: updatedUser.photo,
@@ -288,10 +260,21 @@ io.on('connection', async (socket) => {
                         battery: updatedUser.batteryStatus,
                         settings: updatedUser.settings,
                         lastSeen: updatedUser.lastSeen,
-                        gender: updatedUser.gender, // جديد
-                        phone: updatedUser.phone,     // جديد
-                        email: updatedUser.email      // جديد
+                        gender: updatedUser.gender,
+                        phone: updatedUser.phone,
+                        email: updatedUser.email
+                    };
+
+                    // إرسال التحديث للأصدقاء المرتبطين
+                    updatedUser.linkedFriends.forEach(friendId => {
+                         if (connectedUsers[friendId]) {
+                            io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
+                         }
                     });
+
+                    // إرسال التحديث للمستخدم نفسه
+                    socket.emit('locationUpdate', locationData);
+
                 } else {
                     io.emit('removeUserMarker', { userId: updatedUser.userId });
                 }
@@ -300,7 +283,6 @@ io.on('connection', async (socket) => {
             console.error('❌ خطأ في تحديث الموقع أو حفظ السجل التاريخي:', error);
         }
     });
-
 
     socket.on('requestLink', async (data) => {
         const { friendCode } = data;
@@ -350,7 +332,6 @@ io.on('connection', async (socket) => {
         }
     });
 
-
     socket.on('chatMessage', async (data) => {
         const { receiverId, message } = data;
         if (!socket.userId || !receiverId || !message) return;
@@ -362,7 +343,6 @@ io.on('connection', async (socket) => {
                 message: message,
             });
             await newMessage.save();
-            console.log(`💬 رسالة جديدة من ${socket.userId} إلى ${receiverId}: ${message}`);
 
             if (connectedUsers[receiverId]) {
                 const senderUser = await User.findOne({ userId: socket.userId });
@@ -382,9 +362,7 @@ io.on('connection', async (socket) => {
     socket.on('updateSettings', async (data) => {
         if (!user) return;
         try {
-            // دمج الإعدادات الجديدة مع الإعدادات الموجودة
             user.settings = { ...user.settings, ...data };
-            // جديد: تحديث حقول المستخدم الأساسية (الجنس، الهاتف، البريد) إذا جاءت من الإعدادات
             if (data.gender !== undefined) user.gender = data.gender;
             if (data.phone !== undefined) user.phone = data.phone;
             if (data.email !== undefined) user.email = data.email;
@@ -395,37 +373,21 @@ io.on('connection', async (socket) => {
             if (!user.settings.shareLocation || user.settings.stealthMode) {
                 io.emit('removeUserMarker', { userId: user.userId });
             } else {
-                if (user.location && user.location.coordinates) {
-                    const friendsOfUser = await User.find({ userId: { $in: user.linkedFriends } });
-                    friendsOfUser.forEach(friend => {
-                        if (connectedUsers[friend.userId]) {
-                            io.to(connectedUsers[friend.userId]).emit('locationUpdate', {
-                                userId: user.userId,
-                                name: user.name,
-                                photo: user.photo,
-                                location: user.location.coordinates,
-                                battery: user.batteryStatus,
-                                settings: user.settings,
-                                lastSeen: user.lastSeen,
-                                gender: user.gender,
-                                phone: user.phone,
-                                email: user.email
-                            });
+                 // إرسال تحديث الموقع مجدداً بعد تغيير الإعدادات لضمان ظهور المركر
+                 if (user.location && user.location.coordinates) {
+                    const locationData = {
+                        userId: user.userId, name: user.name, photo: user.photo,
+                        location: user.location.coordinates, battery: user.batteryStatus,
+                        settings: user.settings, lastSeen: user.lastSeen, gender: user.gender,
+                        phone: user.phone, email: user.email
+                    };
+                    user.linkedFriends.forEach(friendId => {
+                        if (connectedUsers[friendId]) {
+                           io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
                         }
-                    });
-                    socket.emit('locationUpdate', {
-                        userId: user.userId,
-                        name: user.name,
-                        photo: user.photo,
-                        location: user.location.coordinates,
-                        battery: user.batteryStatus,
-                        settings: user.settings,
-                        lastSeen: user.lastSeen,
-                        gender: user.gender,
-                        phone: user.phone,
-                        email: user.email
-                    });
-                }
+                   });
+                   socket.emit('locationUpdate', locationData);
+                 }
             }
         } catch (error) {
             console.error('❌ خطأ في تحديث الإعدادات:', error);
@@ -444,53 +406,35 @@ io.on('connection', async (socket) => {
 
     socket.on('requestHistoricalPath', async (data) => {
         const { targetUserId, limit = 100 } = data;
-        if (!user || !targetUserId) {
-            socket.emit('historicalPathData', { success: false, message: 'بيانات الطلب ناقصة.' });
-            return;
-        }
-
+        if (!user || !targetUserId) return;
         try {
             if (!user.linkedFriends.includes(targetUserId) && user.userId !== targetUserId) {
-                socket.emit('historicalPathData', { success: false, message: 'غير مصرح لك برؤية هذا المسار.' });
+                socket.emit('historicalPathData', { success: false, message: 'غير مصرح لك.' });
                 return;
             }
-
             const historicalLocations = await HistoricalLocation.find({ userId: targetUserId })
-                .sort({ timestamp: 1 })
-                .limit(limit);
-
-            socket.emit('historicalPathData', { success: true, userId: targetUserId, path: historicalLocations });
-            console.log(`📈 تم جلب ${historicalLocations.length} نقطة مسار تاريخي لـ ${targetUserId}`);
+                .sort({ timestamp: -1 }).limit(limit);
+            socket.emit('historicalPathData', { success: true, userId: targetUserId, path: historicalLocations.reverse() });
         } catch (error) {
             console.error('❌ خطأ في جلب المسار التاريخي:', error);
-            socket.emit('historicalPathData', { success: false, message: 'حدث خطأ أثناء جلب المسار.' });
+            socket.emit('historicalPathData', { success: false, message: 'خطأ في الخادم.' });
         }
     });
 
     socket.on('unfriendUser', async (data) => {
         const { friendId } = data;
-        if (!user || !friendId) {
-            socket.emit('unfriendStatus', { success: false, message: 'بيانات إلغاء الارتباط ناقصة.' });
-            return;
-        }
+        if (!user || !friendId) return;
 
         try {
             const friendToUnlink = await User.findOne({ userId: friendId });
-
-            if (!friendToUnlink) {
-                socket.emit('unfriendStatus', { success: false, message: 'المستخدم أو الصديق غير موجود.' });
-                return;
-            }
+            if (!friendToUnlink) return;
 
             user.linkedFriends = user.linkedFriends.filter(id => id !== friendId);
             await user.save();
-
             friendToUnlink.linkedFriends = friendToUnlink.linkedFriends.filter(id => id !== user.userId);
             await friendToUnlink.save();
 
-            socket.emit('unfriendStatus', { success: true, message: `🗑️ تم إلغاء الارتباط بنجاح مع ${friendToUnlink.name}.` });
-            console.log(`💔 ${user.name} تم إلغاء ربطه من ${friendToUnlink.name}`);
-
+            socket.emit('unfriendStatus', { success: true, message: `🗑️ تم إلغاء الارتباط بنجاح.` });
             const updatedCurrentUserFriends = await User.find({ userId: { $in: user.linkedFriends } });
             socket.emit('updateFriendsList', updatedCurrentUserFriends);
 
@@ -503,41 +447,32 @@ io.on('connection', async (socket) => {
             socket.emit('removeUserMarker', { userId: friendId });
 
         } catch (error) {
-            console.error('❌ خطأ في معالجة طلب إلغاء الارتباط:', error);
-            socket.emit('unfriendStatus', { success: false, message: 'حدث خطأ أثناء إلغاء الارتباط.' });
+            console.error('❌ خطأ في إلغاء الارتباط:', error);
+            socket.emit('unfriendStatus', { success: false, message: 'خطأ في الخادم.' });
         }
     });
 
     socket.on('addCommunityPOI', async (data) => {
         const { name, description, category, location, icon } = data;
-        if (!user || !name || !location || !Array.isArray(location) || location.length !== 2) {
-            socket.emit('poiStatus', { success: false, message: 'بيانات نقطة الاهتمام ناقصة أو غير صحيحة.' });
-            return;
-        }
+        if (!user || !name || !location) return;
 
         try {
             const newPOI = new CommunityPOI({
-                name,
-                description,
-                category,
-                location: {
-                    type: 'Point',
-                    coordinates: location
-                },
-                createdBy: user.userId,
-                isApproved: true,
-                icon: icon || '<i class="fas fa-map-marker-alt"></i>'
+                name, description, category,
+                location: { type: 'Point', coordinates: location },
+                createdBy: user.userId, isApproved: true, icon
             });
             await newPOI.save();
-            console.log(`➕ تم إضافة نقطة اهتمام جديدة بواسطة ${user.userId}: ${newPOI.name}`);
+            
+            user.createdPOIs.push(newPOI._id);
+            await user.save();
+
             socket.emit('poiStatus', { success: true, message: `✅ تم إضافة ${newPOI.name} بنجاح.` });
+            io.emit('updatePOIs');
 
-            io.emit('updatePOIs'); // طلب تحديث POIs من كل العملاء
-
-        } catch (error)
-        {
-            console.error('❌ خطأ في إضافة نقطة اهتمام:', error);
-            socket.emit('poiStatus', { success: false, message: 'حدث خطأ أثناء إضافة نقطة الاهتمام.' });
+        } catch (error) {
+            console.error('❌ خطأ في إضافة POI:', error);
+            socket.emit('poiStatus', { success: false, message: 'خطأ في الخادم.' });
         }
     });
 
@@ -545,21 +480,14 @@ io.on('connection', async (socket) => {
         try {
             const pois = await CommunityPOI.find({ isApproved: true });
             socket.emit('updatePOIsList', pois);
-            console.log(`🗺️ تم جلب ${pois.length} نقطة اهتمام.`);
         } catch (error) {
-            console.error('❌ خطأ في جلب نقاط الاهتمام:', error);
-            socket.emit('updatePOIsList', []);
+            console.error('❌ خطأ في جلب POIs:', error);
         }
     });
 
-    // جديد: جلب سجل الدردشة
     socket.on('requestChatHistory', async (data) => {
         const { friendId } = data;
-        if (!socket.userId || !friendId) {
-            socket.emit('chatHistoryData', { success: false, message: 'بيانات الطلب ناقصة.' });
-            return;
-        }
-
+        if (!socket.userId || !friendId) return;
         try {
             const chatHistory = await Message.find({
                 $or: [
@@ -567,20 +495,109 @@ io.on('connection', async (socket) => {
                     { senderId: friendId, receiverId: socket.userId }
                 ]
             }).sort({ timestamp: 1 });
-
             socket.emit('chatHistoryData', { success: true, friendId: friendId, history: chatHistory });
-            console.log(`💬 تم جلب سجل دردشة بين ${socket.userId} و ${friendId}.`);
         } catch (error) {
             console.error('❌ خطأ في جلب سجل الدردشة:', error);
-            socket.emit('chatHistoryData', { success: false, message: 'حدث خطأ أثناء جلب سجل الدردشة.' });
         }
     });
 
-    // جديد: حدث لطلب تحديث POIs من الخادم (عند إضافة POI جديدة)
-    socket.on('updatePOIs', () => {
-        socket.emit('requestPOIs');
+    socket.on('setMeetingPoint', async (data) => {
+        if (!user || !data.name || !data.location) return;
+        try {
+            user.meetingPoint = {
+                name: data.name,
+                location: { type: 'Point', coordinates: data.location }
+            };
+            await user.save();
+            const meetingData = {
+                creatorId: user.userId,
+                creatorName: user.name,
+                point: user.meetingPoint
+            };
+            socket.emit('newMeetingPoint', meetingData);
+            user.linkedFriends.forEach(friendId => {
+                if (connectedUsers[friendId]) {
+                    io.to(connectedUsers[friendId]).emit('newMeetingPoint', meetingData);
+                }
+            });
+        } catch (error) {
+            console.error('❌ خطأ في تحديد نقطة التجمع:', error);
+        }
     });
 
+    socket.on('clearMeetingPoint', async () => {
+        if (!user) return;
+        try {
+            const creatorId = user.userId;
+            user.meetingPoint = undefined;
+            await user.save();
+            socket.emit('meetingPointCleared', { creatorId });
+            user.linkedFriends.forEach(friendId => {
+                if (connectedUsers[friendId]) {
+                    io.to(connectedUsers[friendId]).emit('meetingPointCleared', { creatorId });
+                }
+            });
+        } catch (error) {
+            console.error('❌ خطأ في إنهاء نقطة التجمع:', error);
+        }
+    });
+
+    socket.on('addMoazeb', async (data) => {
+        if (!user || !data.name || !data.address || !data.phone || !data.governorate || !data.district || !data.location) {
+            socket.emit('moazebStatus', { success: false, message: 'البيانات ناقصة.' });
+            return;
+        }
+        try {
+            const newMoazeb = new Moazeb({
+                ...data,
+                location: { type: 'Point', coordinates: data.location },
+                createdBy: user.userId
+            });
+            await newMoazeb.save();
+            socket.emit('moazebStatus', { success: true, message: '✅ تم إضافة المضيف بنجاح!' });
+        } catch (error) {
+            console.error('❌ خطأ في إضافة مضيف:', error);
+            socket.emit('moazebStatus', { success: false, message: 'حدث خطأ في الخادم.' });
+        }
+    });
+
+    socket.on('searchMoazeb', async (query) => {
+        try {
+            const searchCriteria = {};
+            if (query.phone) searchCriteria.phone = { $regex: query.phone, $options: 'i' };
+            if (query.governorate) searchCriteria.governorate = { $regex: query.governorate, $options: 'i' };
+            if (query.district) searchCriteria.district = { $regex: query.district, $options: 'i' };
+
+            const results = await Moazeb.find(searchCriteria).limit(20);
+            socket.emit('moazebSearchResults', { success: true, results });
+
+        } catch (error) {
+            console.error('❌ خطأ في البحث عن مضيف:', error);
+        }
+    });
+
+    socket.on('requestPrayerTimes', async () => {
+        try {
+            const latitude = 32.6163; // كربلاء
+            const longitude = 44.0249; // كربلاء
+            const method = 2; // Jafari (Ithna Ashari)
+            const date = new Date();
+            const dateString = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
+            
+            const response = await axios.get(`http://api.aladhan.com/v1/timings/${dateString}`, {
+                params: { latitude, longitude, method }
+            });
+
+            if (response.data && response.data.code === 200) {
+                socket.emit('prayerTimesData', { success: true, timings: response.data.data.timings });
+            } else {
+                throw new Error('Failed to fetch prayer times from API.');
+            }
+        } catch (error) {
+            console.error("❌ خطأ في جلب أوقات الصلاة:", error.message);
+            socket.emit('prayerTimesData', { success: false, message: 'فشل جلب أوقات الصلاة.' });
+        }
+    });
 
     socket.on('disconnect', () => {
         console.log(`👋 مستخدم قطع الاتصال: ${socket.id}`);
