@@ -1,4 +1,3 @@
-// server.js
 
 // تحميل متغيرات البيئة من ملف .env
 require('dotenv').config();
@@ -52,8 +51,13 @@ const UserSchema = new mongoose.Schema({
         sound: { type: Boolean, default: true },
         hideBubbles: { type: Boolean, default: false },
         stealthMode: { type: Boolean, default: false },
-        emergencyWhatsapp: { type: String, default: '' } // جديد: رقم الواتساب للطوارئ
+        emergencyWhatsapp: { type: String, default: '' } // رقم الواتساب للطوارئ
     },
+    // جديد: حقول المعلومات الإلزامية
+    gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
+    phone: { type: String, default: '' },
+    email: { type: String, default: '' },
+    // نهاية الحقول الجديدة
     batteryStatus: { type: String, default: 'N/A' },
     lastSeen: { type: Date, default: Date.now }
 }, { timestamps: true });
@@ -70,6 +74,9 @@ const MessageSchema = new mongoose.Schema({
     message: { type: String, required: true },
     timestamp: { type: Date, default: Date.now }
 });
+
+// جديد: TTL index لحذف الرسائل تلقائياً بعد 24 ساعة (86400 ثانية)
+MessageSchema.index({ "timestamp": 1 }, { expireAfterSeconds: 86400 });
 
 const Message = mongoose.model('Message', MessageSchema);
 
@@ -129,7 +136,7 @@ const CommunityPOISchema = new mongoose.Schema({
     },
     createdBy: { type: String, required: true },
     isApproved: { type: Boolean, default: true }, // تغيير مؤقت: اجعلها true لكي تظهر مباشرة
-    icon: { type: String, default: '<i class="fas fa-map-marker-alt"></i>' }, // جديد: أيقونة خاصة بالنقطة
+    icon: { type: String, default: '<i class="fas fa-map-marker-alt"></i>' }, // أيقونة خاصة بالنقطة
     likes: [{ type: String }],
     dislikes: [{ type: String }],
 }, { timestamps: true });
@@ -155,7 +162,7 @@ io.on('connection', async (socket) => {
     let user; // تعريف متغير user هنا ليكون متاحاً في نطاق socket
 
     socket.on('registerUser', async (data) => {
-        const { userId, name, photo, emergencyWhatsapp } = data;
+        const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data; // استقبال الحقول الجديدة
 
         try {
             user = await User.findOne({ userId: userId });
@@ -169,14 +176,21 @@ io.on('connection', async (socket) => {
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
                     settings: { // تعيين إعدادات الطوارئ عند الإنشاء
                         emergencyWhatsapp: emergencyWhatsapp || ''
-                    }
+                    },
+                    gender: gender || 'other', // حفظ الجنس
+                    phone: phone || '', // حفظ رقم الهاتف
+                    email: email || '' // حفظ البريد الإلكتروني
                 });
                 await user.save();
                 console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
             } else {
+                // تحديث بيانات المستخدم إذا تم إرسالها
                 if (name && user.name !== name) user.name = name;
                 if (photo && user.photo !== photo) user.photo = photo;
-                // تحديث رقم الواتساب للطوارئ
+                if (gender && user.gender !== gender) user.gender = gender; // تحديث الجنس
+                if (phone && user.phone !== phone) user.phone = phone;     // تحديث الهاتف
+                if (email && user.email !== email) user.email = email;     // تحديث البريد
+                // تحديث رقم الواتساب للطوارئ (إذا تم إرساله وكان مختلفاً)
                 if (emergencyWhatsapp !== undefined && user.settings.emergencyWhatsapp !== emergencyWhatsapp) {
                     user.settings.emergencyWhatsapp = emergencyWhatsapp;
                 }
@@ -352,6 +366,7 @@ io.on('connection', async (socket) => {
     socket.on('updateSettings', async (data) => {
         if (!user) return;
         try {
+            // دمج الإعدادات الجديدة مع الإعدادات الموجودة
             user.settings = { ...user.settings, ...data };
             await user.save();
             console.log(`⚙️ تم تحديث إعدادات ${user.name}:`, user.settings);
@@ -456,7 +471,7 @@ io.on('connection', async (socket) => {
                 io.to(connectedUsers[friendToUnlink.userId]).emit('unfriendStatus', { success: true, message: `💔 قام ${user.name} بإلغاء الربط معك.` });
                 const updatedFriendFriends = await User.find({ userId: { $in: friendToUnlink.linkedFriends } });
                 io.to(connectedUsers[friendToUnlink.userId]).emit('updateFriendsList', updatedFriendFriends);
-                io.to(connectedUsers[friendToLink.userId]).emit('removeUserMarker', { userId: user.userId }); // Fix: use friendToLink.userId
+                io.to(connectedUsers[friendToUnlink.userId]).emit('removeUserMarker', { userId: user.userId });
             }
             socket.emit('removeUserMarker', { userId: friendId });
 
@@ -467,7 +482,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('addCommunityPOI', async (data) => {
-        const { name, description, category, location, icon } = data; // استقبال الأيقونة
+        const { name, description, category, location, icon } = data;
         if (!user || !name || !location || !Array.isArray(location) || location.length !== 2) {
             socket.emit('poiStatus', { success: false, message: 'بيانات نقطة الاهتمام ناقصة أو غير صحيحة.' });
             return;
@@ -484,7 +499,7 @@ io.on('connection', async (socket) => {
                 },
                 createdBy: user.userId,
                 isApproved: true,
-                icon: icon || '<i class="fas fa-map-marker-alt"></i>' // حفظ الأيقونة
+                icon: icon || '<i class="fas fa-map-marker-alt"></i>'
             });
             await newPOI.save();
             console.log(`➕ تم إضافة نقطة اهتمام جديدة بواسطة ${user.userId}: ${newPOI.name}`);
@@ -534,7 +549,7 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // جديد: حدث لطلب تحديث POIs من الخادم
+    // جديد: حدث لطلب تحديث POIs من الخادم (عند إضافة POI جديدة)
     socket.on('updatePOIs', () => {
         socket.emit('requestPOIs');
     });
