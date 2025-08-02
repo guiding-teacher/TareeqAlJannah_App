@@ -466,6 +466,7 @@ function startLocationTracking() {
     navigator.geolocation.watchPosition(
         async (position) => {
             const { longitude, latitude } = position.coords;
+
             socket.emit('updateLocation', {
                 userId: currentUser.userId,
                 location: [longitude, latitude],
@@ -525,7 +526,6 @@ function sendMessageFromBottomBar() {
         return;
     }
     if (messageText) {
-        // إضافة الرسالة إلى سجل الدردشة إذا كان مفتوحاً
         if (document.getElementById('chatPanel').classList.contains('active')) {
              addChatMessage(currentUser.name, messageText, 'sent', new Date());
         }
@@ -643,7 +643,7 @@ function setupChatPanel() {
 // دالة مساعدة لمعالج حدث تغيير اختيار الصديق في الدردشة
 function handleChatFriendChange(e) {
     currentChatFriendId = e.target.value;
-    document.getElementById('bottomChatFriendSelect').value = currentChatFriendId; // مزامنة مع الشريط السفلي
+    document.getElementById('bottomChatFriendSelect').value = currentChatFriendId;
     const chatMessagesDiv = document.getElementById('chatMessages');
     if (chatMessagesDiv) chatMessagesDiv.innerHTML = '<p style="text-align: center; color: #999;">جاري تحميل الرسائل...</p>';
     socket.emit('requestChatHistory', { friendId: currentChatFriendId });
@@ -682,7 +682,6 @@ function setupBottomChatBar() {
 
 // ====== التعامل مع أحداث WebSocket من الخادم ======
 
-// 0. تسجيل المستخدم عند الاتصال لأول مرة
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId');
     if (!userId) {
@@ -696,7 +695,6 @@ socket.on('connect', () => {
     const email = localStorage.getItem('appUserEmail') || null;
     const emergencyWhatsapp = localStorage.getItem('appEmergencyWhatsapp') || null;
 
-    // إرسال جميع البيانات عند التسجيل/التحديث
     socket.emit('registerUser', { userId, name: userName, photo: userPhoto, gender: gender, phone: phone, email: email, emergencyWhatsapp: emergencyWhatsapp });
     console.log('تم إرسال طلب تسجيل المستخدم إلى الخادم:', userId);
 });
@@ -712,7 +710,6 @@ socket.on('currentUserData', (user) => {
     localStorage.setItem('appUserEmail', currentUser.email || '');
     localStorage.setItem('appEmergencyWhatsapp', currentUser.settings.emergencyWhatsapp || '');
 
-    // تحديث الواجهة ببيانات المستخدم الأولية
     document.getElementById('userName').textContent = currentUser.name;
     document.getElementById('userPhoto').src = currentUser.photo;
     document.getElementById('userLinkCode').textContent = currentUser.linkCode;
@@ -722,12 +719,10 @@ socket.on('currentUserData', (user) => {
     document.getElementById('editPhoneInput').value = currentUser.phone || '';
     document.getElementById('editEmailInput').value = currentUser.email || '';
 
-    // تحديث حقول المعلومات الأولية في لوحة initialInfoPanel
-    if (document.getElementById('initialInfoNameInput')) document.getElementById('initialInfoNameInput').value = currentUser.name;
-    if (document.getElementById('initialInfoGenderSelect')) document.getElementById('initialInfoGenderSelect').value = currentUser.gender;
-    if (document.getElementById('initialInfoPhoneInput')) document.getElementById('initialInfoPhoneInput').value = currentUser.phone;
-    if (document.getElementById('initialInfoEmailInput')) document.getElementById('initialInfoEmailInput').value = currentUser.email;
-
+    document.getElementById('initialInfoNameInput').value = currentUser.name;
+    document.getElementById('initialInfoGenderSelect').value = currentUser.gender || 'other';
+    document.getElementById('initialInfoPhoneInput').value = currentUser.phone || '';
+    document.getElementById('initialInfoEmailInput').value = currentUser.email || '';
 
     document.getElementById('shareLocationToggle').checked = currentUser.settings.shareLocation;
     document.getElementById('soundToggle').checked = currentUser.settings.sound;
@@ -740,13 +735,12 @@ socket.on('currentUserData', (user) => {
         socket.emit('requestFriendsData', { friendIds: currentUser.linkedFriends });
     }
 
-    // جديد: إظهار لوحة المعلومات الأولية إذا كانت البيانات غير مكتملة
     const storedName = localStorage.getItem('appUserName');
     const storedGender = localStorage.getItem('appUserGender');
     const storedPhone = localStorage.getItem('appUserPhone');
     const storedEmail = localStorage.getItem('appUserEmail');
 
-    if (!storedName || storedGender === 'other' || !storedPhone || !storedEmail) {
+    if (!storedName || !storedGender || storedGender === 'other' || !storedPhone || !storedEmail) {
         document.getElementById('initialInfoPanel').classList.add('active');
     } else {
         document.getElementById('initialInfoPanel').classList.remove('active');
@@ -757,7 +751,6 @@ socket.on('locationUpdate', (data) => {
     let userToUpdate;
     if (data.userId === currentUser.userId) {
         currentUser.location = data.location;
-        currentUser.battery = data.battery;
         currentUser.batteryStatus = data.battery;
         currentUser.settings = data.settings;
         currentUser.lastSeen = data.lastSeen;
@@ -769,7 +762,6 @@ socket.on('locationUpdate', (data) => {
         userToUpdate = linkedFriends.find(f => f.userId === data.userId);
         if (userToUpdate) {
             userToUpdate.location = data.location;
-            userToUpdate.battery = data.battery;
             userToUpdate.batteryStatus = data.battery;
             userToUpdate.settings = data.settings;
             userToUpdate.lastSeen = data.lastSeen;
@@ -782,7 +774,6 @@ socket.on('locationUpdate', (data) => {
                 name: data.name,
                 photo: data.photo,
                 location: data.location,
-                battery: data.battery,
                 batteryStatus: data.battery,
                 settings: data.settings,
                 lastSeen: data.lastSeen,
@@ -827,14 +818,14 @@ socket.on('linkStatus', (data) => {
         document.querySelectorAll('.main-header nav button').forEach(btn => {
             btn.classList.remove('active');
         });
-        document.getElementById('showFriendsMapBtn').classList.add('active'); // اجعل زر الأصدقاء نشطاً
+        document.getElementById('showFriendsMapBtn').classList.add('active');
     }
 });
 
 socket.on('unfriendStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        showFriendsMap(); // تحديث الخريطة لإزالة الصديق
+        showFriendsMap();
     }
 });
 
@@ -842,10 +833,9 @@ socket.on('updateFriendsList', (friendsData) => {
     linkedFriends = friendsData;
     console.log('تم تحديث قائمة الأصدقاء:', linkedFriends);
 
-    showFriendsMap(); // إعادة رسم الخريطة لإظهار الأصدقاء الجدد
-    setupBottomChatBar(); // تحديث شريط الدردشة السفلي
+    showFriendsMap();
+    setupBottomChatBar();
 
-    // إذا كانت لوحة الأصدقاء مفتوحة، قم بتحديث قائمتها
     if (document.getElementById('connectPanel').classList.contains('active')) {
         const friendsListEl = document.getElementById('friendsList');
         friendsListEl.innerHTML = '';
@@ -860,7 +850,6 @@ socket.on('updateFriendsList', (friendsData) => {
                 `;
                 friendsListEl.appendChild(li);
             });
-            // ربط معالجات الأحداث لأزرار إلغاء الارتباط داخل القائمة
             document.querySelectorAll('.unfriend-in-list-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const friendIdToUnlink = e.currentTarget.dataset.friendId;
@@ -874,21 +863,20 @@ socket.on('updateFriendsList', (friendsData) => {
             friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
         }
     }
-    updateFriendBatteryStatus(); // تحديث لوحة البطارية أيضاً
+    updateFriendBatteryStatus();
 });
 
 socket.on('newChatMessage', (data) => {
-    // عرض فقاعة الرسالة دائماً (إذا لم يكن المستخدم قد قام بإخفائها)
-    if (!currentUser.settings.hideBubbles) {
-        showMessageBubble(data.senderId, data.message);
-    }
-    // تشغيل الصوت إذا كانت الأصوات مفعلة
-    if (currentUser.settings.sound) {
-        playNotificationSound();
-    }
-    // تحديث لوحة الدردشة فقط إذا كانت هذه الرسالة تخص المحادثة الحالية ومفتوحة
-    if (currentUser && data.receiverId === currentUser.userId && data.senderId === currentChatFriendId && document.getElementById('chatPanel').classList.contains('active')) {
-        addChatMessage(data.senderName, data.message, 'received', data.timestamp);
+    if (currentUser && data.receiverId === currentUser.userId) {
+        if (!currentUser.settings.hideBubbles) {
+            showMessageBubble(data.senderId, data.message);
+        }
+        if (currentUser.settings.sound) {
+            playNotificationSound();
+        }
+        if (data.senderId === currentChatFriendId && document.getElementById('chatPanel').classList.contains('active')) {
+            addChatMessage(data.senderName, data.message, 'received', data.timestamp);
+        }
     }
 });
 
@@ -901,13 +889,13 @@ socket.on('removeUserMarker', (data) => {
         map.removeLayer(`line-${currentUser.userId}-${data.userId}`);
         map.removeSource(`line-${currentUser.userId}-${data.userId}`);
     }
-    showFriendsMap(); // إعادة رسم الخريطة للتأكد من تحديث العرض
+    showFriendsMap();
 });
 
 socket.on('poiStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        socket.emit('requestPOIs'); // إذا نجحت الإضافة، اطلب تحديث قائمة النقاط
+        socket.emit('requestPOIs');
     }
 });
 
@@ -923,14 +911,12 @@ socket.on('updatePOIsList', (poisData) => {
     console.log('تم تحديث قائمة نقاط الاهتمام:', poisData);
 });
 
-// استقبال بيانات المسار التاريخي ورسمها
 socket.on('historicalPathData', (data) => {
     if (data.success) {
         if (data.path && data.path.length > 0) {
             const coordinates = data.path.map(loc => loc.location.coordinates);
             drawHistoricalPath(data.userId, coordinates);
             alert(`تم عرض المسار التاريخي لـ ${data.userId}.`);
-            // إخفاء لوحة الميزات بعد عرض المسار بنجاح
             togglePanel(null); // لإغلاق جميع اللوحات
             document.getElementById('showFriendsMapBtn').classList.add('active'); // إعطاء التركيز لزر خريطة الأصدقاء
             showFriendsMap();
@@ -942,17 +928,15 @@ socket.on('historicalPathData', (data) => {
     }
 });
 
-// حدث لاستقبال سجل الدردشة
 socket.on('chatHistoryData', (data) => {
     const chatMessagesDiv = document.getElementById('chatMessages');
-    if (!chatMessagesDiv) return; // تأكد أن العنصر موجود
+    if (!chatMessagesDiv) return;
 
-    chatMessagesDiv.innerHTML = ''; // مسح الرسائل القديمة
+    chatMessagesDiv.innerHTML = '';
 
     if (data.success && data.history && data.history.length > 0) {
         data.history.forEach(msg => {
             const messageType = (msg.senderId === currentUser.userId) ? 'sent' : 'received';
-            // جلب اسم المرسل (يمكن أن نمرر الاسم من الخادم لتجنب البحث هنا)
             const senderName = (msg.senderId === currentUser.userId) ? currentUser.name :
                                linkedFriends.find(f => f.userId === msg.senderId)?.name || 'صديق';
             addChatMessage(senderName, msg.message, messageType, msg.timestamp);
@@ -968,17 +952,16 @@ map.on('load', () => {
     document.getElementById('showGeneralMapBtn').classList.add('active');
 });
 
-// ====== هذا الجزء يضمن أن عناصر DOM الديناميكية يتم إنشاؤها وربط الأحداث بها بعد تحميل الصفحة ======
+// ====== هذا الجزء يضمن ربط الأحداث بعد تحميل الصفحة ======
 document.addEventListener('DOMContentLoaded', () => {
-
-    // ربط معالجات الأحداث للأزرار الرئيسية (بعد التأكد من وجودها في DOM)
+    // ربط معالجات الأحداث للأزرار الرئيسية
     document.getElementById('showGeneralMapBtn').addEventListener('click', () => {
         if (linkedFriends.length > 0 && document.getElementById('showFriendsMapBtn') && document.getElementById('showFriendsMapBtn').classList.contains('active')) {
             if (!confirm("هل أنت متأكد أنك تريد مغادرة خريطة الأصدقاء والعودة للخريطة العامة؟")) {
                 return;
             }
         }
-        togglePanel('generalMapPanelDummy'); // ID وهمي لتفعيل الزر في الهيدر
+        togglePanel('generalMapPanelDummy');
         showGeneralMap();
     });
 
@@ -987,7 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
             return;
         }
-        togglePanel('friendsMapPanelDummy'); // ID وهمي لتفعيل الزر
+        togglePanel('friendsMapPanelDummy');
         showFriendsMap();
     });
 
@@ -999,12 +982,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('userName').textContent = currentUser.name;
         document.getElementById('userPhoto').src = currentUser.photo;
         document.getElementById('userLinkCode').textContent = currentUser.linkCode;
-        // تحديث حقول معلومات المستخدم في لوحة الملف الشخصي
         document.getElementById('editUserNameInput').value = currentUser.name;
         document.getElementById('editGenderSelect').value = currentUser.gender || 'other';
         document.getElementById('editPhoneInput').value = currentUser.phone || '';
         document.getElementById('editEmailInput').value = currentUser.email || '';
-
         togglePanel('profilePanel');
         showFriendsMap();
     });
@@ -1033,19 +1014,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const newEmail = document.getElementById('editEmailInput').value.trim();
 
         if (newName && newGender !== 'other' && newPhone && newEmail) {
-            // تحديث محلي
             currentUser.name = newName;
             currentUser.gender = newGender;
             currentUser.phone = newPhone;
             currentUser.email = newEmail;
             
-            // حفظ محلي
             localStorage.setItem('appUserName', newName);
             localStorage.setItem('appUserGender', newGender);
             localStorage.setItem('appUserPhone', newPhone);
             localStorage.setItem('appUserEmail', newEmail);
 
-            // إرسال للخادم
             socket.emit('updateSettings', {
                 name: newName,
                 gender: newGender,
@@ -1133,7 +1111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     document.getElementById('toggleChatHistoryBtn').addEventListener('click', () => {
-        document.getElementById('showChatBtn').click(); // محاكاة الضغط على زر الدردشة الرئيسي
+        document.getElementById('showChatBtn').click();
     });
 
 
@@ -1321,7 +1299,6 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(`وضع التخفي: ${e.target.checked ? 'مفعّل (لن تظهر على الخريطة للآخرين)' : 'معطل (ستظهر على الخريطة)'}. (تم الإرسال للخادم).`);
     });
 
-    // معالج لزر حفظ رقم الواتساب للطوارئ
     const updateEmergencyWhatsappBtn = document.getElementById('updateEmergencyWhatsappBtn');
     if (updateEmergencyWhatsappBtn) {
         updateEmergencyWhatsappBtn.addEventListener('click', () => {
@@ -1338,7 +1315,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // معالجات التحكم بـ 3D الخريطة
     const mapPitchInput = document.getElementById('mapPitch');
     const mapBearingInput = document.getElementById('mapBearing');
     if (mapPitchInput && mapBearingInput) {
