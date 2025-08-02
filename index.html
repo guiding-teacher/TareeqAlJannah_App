@@ -1,16 +1,15 @@
 
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طريق الجنة - تحديد المواقع والمراسلة المخصص للعراق</title>
-    <!-- Mapbox GL JS CSS -->
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
-     <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    <!-- Mapbox GL JS CSS --><link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
-    <!-- Font Awesome for Icons -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
@@ -101,6 +100,10 @@
     <!-- لوحة المراسلة (سجل الدردشة) -->
     <div class="overlay-panel" id="chatPanel">
         <h2><i class="fas fa-comment-alt"></i> سجل المراسلات</h2>
+        <div class="chat-header" style="margin-bottom: 10px;">
+            <label for="chatFriendSelect" style="display: block; margin-bottom: 5px; color: #555;">الدردشة مع:</label>
+            <select id="chatFriendSelect" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;"></select>
+        </div>
         <div id="chatMessages"></div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
