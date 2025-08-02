@@ -38,7 +38,7 @@ const holySites = [
 
 // تأكد من تحديث هذا الرابط إلى رابط خدمة Render الخاصة بك
 // const socket = io('http://localhost:3000'); // للتجربة المحلية
-const socket = io('https://tareeq-aljannah-backend.onrender.com'); // للنسخة المنشورة
+const socket = io('https://tareeqaljannah-app.onrender.com'); // للنسخة المنشورة
 
 
 // ====== وظائف عامة للواجهة الرسومية (UI Helpers) ======
