@@ -325,12 +325,13 @@ body {
     object-fit: cover;
     box-shadow: var(--shadow);
     animation: pulse 1.5s infinite alternate;
-    /* لجعل مركر المستخدم الحالي أخضر */
-    border: 4px solid var(--accent-color);
+    /* لجعل مركر المستخدم الحالي أخضر، ومركر الأصدقاء أزرق */
+    border: 4px solid var(--accent-color); /* افتراضي: أخضر */
 }
 
 /* لجعل مركر الصديق بلون مختلف (مثلاً أزرق) */
-.mapboxgl-marker:not(.stealth-mode) .user-marker-photo {
+/* هذا يتطلب إضافة class ديناميكياً في JS لمركر الصديق */
+.friend-marker .user-marker-photo {
     border: 4px solid var(--primary-color);
 }
 
