@@ -407,9 +407,9 @@ io.on('connection', async (socket) => {
                                 battery: user.batteryStatus,
                                 settings: user.settings,
                                 lastSeen: user.lastSeen,
-                                gender: user.gender, // جديد
-                                phone: user.phone,     // جديد
-                                email: user.email      // جديد
+                                gender: user.gender,
+                                phone: user.phone,
+                                email: user.email
                             });
                         }
                     });
@@ -421,9 +421,9 @@ io.on('connection', async (socket) => {
                         battery: user.batteryStatus,
                         settings: user.settings,
                         lastSeen: user.lastSeen,
-                        gender: user.gender, // جديد
-                        phone: user.phone,     // جديد
-                        email: user.email      // جديد
+                        gender: user.gender,
+                        phone: user.phone,
+                        email: user.email
                     });
                 }
             }
