@@ -52,11 +52,7 @@ const UserSchema = new mongoose.Schema({
         sound: { type: Boolean, default: true },
         hideBubbles: { type: Boolean, default: false },
         stealthMode: { type: Boolean, default: false },
-        emergencyWhatsapp: { type: String, default: '' }, // رقم الواتساب للطوارئ
-        // جديد: إعدادات الخصوصية للعرض للأصدقاء
-        showGender: { type: Boolean, default: false },
-        showPhone: { type: Boolean, default: false },
-        showEmail: { type: Boolean, default: false }
+        emergencyWhatsapp: { type: String, default: '' } // رقم الواتساب للطوارئ
     },
     // جديد: حقول المعلومات الإلزامية
     gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
@@ -149,6 +145,15 @@ const CommunityPOISchema = new mongoose.Schema({
 CommunityPOISchema.index({ location: '2dsphere' });
 
 const CommunityPOI = mongoose.model('CommunityPOI', CommunityPOISchema);
+
+// 6. نموذج المجموعة (Group Model) - هيكل مبدئي فقط للميزة المعقدة
+const GroupSchema = new mongoose.Schema({
+    groupName: { type: String, required: true, unique: true },
+    adminId: { type: String, required: true }, // userId لمن أنشأ المجموعة
+    members: [{ type: String }], // userIds للأعضاء
+    createdAt: { type: Date, default: Date.now }
+});
+const Group = mongoose.model('Group', GroupSchema);
 
 
 // ====== إعدادات Express ======
@@ -267,8 +272,11 @@ io.on('connection', async (socket) => {
                                 photo: updatedUser.photo,
                                 location: updatedUser.location.coordinates,
                                 battery: updatedUser.batteryStatus,
-                                settings: updatedUser.settings, // إرسال إعدادات المستخدم الكاملة
-                                lastSeen: updatedUser.lastSeen
+                                settings: updatedUser.settings,
+                                lastSeen: updatedUser.lastSeen,
+                                gender: updatedUser.gender, // جديد
+                                phone: updatedUser.phone,     // جديد
+                                email: updatedUser.email      // جديد
                             });
                         }
                     });
@@ -278,8 +286,11 @@ io.on('connection', async (socket) => {
                         photo: updatedUser.photo,
                         location: updatedUser.location.coordinates,
                         battery: updatedUser.batteryStatus,
-                        settings: updatedUser.settings, // إرسال إعدادات المستخدم الكاملة
-                        lastSeen: updatedUser.lastSeen
+                        settings: updatedUser.settings,
+                        lastSeen: updatedUser.lastSeen,
+                        gender: updatedUser.gender, // جديد
+                        phone: updatedUser.phone,     // جديد
+                        email: updatedUser.email      // جديد
                     });
                 } else {
                     io.emit('removeUserMarker', { userId: updatedUser.userId });
@@ -373,6 +384,11 @@ io.on('connection', async (socket) => {
         try {
             // دمج الإعدادات الجديدة مع الإعدادات الموجودة
             user.settings = { ...user.settings, ...data };
+            // جديد: تحديث حقول المستخدم الأساسية (الجنس، الهاتف، البريد) إذا جاءت من الإعدادات
+            if (data.gender !== undefined) user.gender = data.gender;
+            if (data.phone !== undefined) user.phone = data.phone;
+            if (data.email !== undefined) user.email = data.email;
+
             await user.save();
             console.log(`⚙️ تم تحديث إعدادات ${user.name}:`, user.settings);
 
@@ -390,7 +406,10 @@ io.on('connection', async (socket) => {
                                 location: user.location.coordinates,
                                 battery: user.batteryStatus,
                                 settings: user.settings,
-                                lastSeen: user.lastSeen
+                                lastSeen: user.lastSeen,
+                                gender: user.gender, // جديد
+                                phone: user.phone,     // جديد
+                                email: user.email      // جديد
                             });
                         }
                     });
@@ -401,7 +420,10 @@ io.on('connection', async (socket) => {
                         location: user.location.coordinates,
                         battery: user.batteryStatus,
                         settings: user.settings,
-                        lastSeen: user.lastSeen
+                        lastSeen: user.lastSeen,
+                        gender: user.gender, // جديد
+                        phone: user.phone,     // جديد
+                        email: user.email      // جديد
                     });
                 }
             }
@@ -476,9 +498,9 @@ io.on('connection', async (socket) => {
                 io.to(connectedUsers[friendToUnlink.userId]).emit('unfriendStatus', { success: true, message: `💔 قام ${user.name} بإلغاء الربط معك.` });
                 const updatedFriendFriends = await User.find({ userId: { $in: friendToUnlink.linkedFriends } });
                 io.to(connectedUsers[friendToUnlink.userId]).emit('updateFriendsList', updatedFriendFriends);
-                io.to(connectedUsers[friendToUnlink.userId]).emit('removeUserMarker', { userId: user.userId }); // إزالة مركر المستخدم من خريطة الصديق
+                io.to(connectedUsers[friendToUnlink.userId]).emit('removeUserMarker', { userId: user.userId });
             }
-            socket.emit('removeUserMarker', { userId: friendId }); // إزالة مركر الصديق من خريطة المستخدم الحالي
+            socket.emit('removeUserMarker', { userId: friendId });
 
         } catch (error) {
             console.error('❌ خطأ في معالجة طلب إلغاء الارتباط:', error);
@@ -530,7 +552,7 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // جلب سجل الدردشة
+    // جديد: جلب سجل الدردشة
     socket.on('requestChatHistory', async (data) => {
         const { friendId } = data;
         if (!socket.userId || !friendId) {
@@ -554,7 +576,7 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // حدث لطلب تحديث POIs من الخادم (عند إضافة POI جديدة)
+    // جديد: حدث لطلب تحديث POIs من الخادم (عند إضافة POI جديدة)
     socket.on('updatePOIs', () => {
         socket.emit('requestPOIs');
     });
