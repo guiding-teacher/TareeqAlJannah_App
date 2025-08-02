@@ -373,7 +373,6 @@ io.on('connection', async (socket) => {
             if (!user.settings.shareLocation || user.settings.stealthMode) {
                 io.emit('removeUserMarker', { userId: user.userId });
             } else {
-                 // إرسال تحديث الموقع مجدداً بعد تغيير الإعدادات لضمان ظهور المركر
                  if (user.location && user.location.coordinates) {
                     const locationData = {
                         userId: user.userId, name: user.name, photo: user.photo,
@@ -405,19 +404,22 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestHistoricalPath', async (data) => {
-        const { targetUserId, limit = 100 } = data;
-        if (!user || !targetUserId) return;
+        const { targetUserId, limit = 200 } = data;
+        if (!user || !targetUserId) {
+            socket.emit('historicalPathData', { success: false, message: 'بيانات الطلب ناقصة.' });
+            return;
+        }
         try {
             if (!user.linkedFriends.includes(targetUserId) && user.userId !== targetUserId) {
-                socket.emit('historicalPathData', { success: false, message: 'غير مصرح لك.' });
+                socket.emit('historicalPathData', { success: false, message: 'غير مصرح لك برؤية هذا المسار.' });
                 return;
             }
             const historicalLocations = await HistoricalLocation.find({ userId: targetUserId })
-                .sort({ timestamp: -1 }).limit(limit);
-            socket.emit('historicalPathData', { success: true, userId: targetUserId, path: historicalLocations.reverse() });
+                .sort({ timestamp: 1 }).limit(limit);
+            socket.emit('historicalPathData', { success: true, userId: targetUserId, path: historicalLocations });
         } catch (error) {
             console.error('❌ خطأ في جلب المسار التاريخي:', error);
-            socket.emit('historicalPathData', { success: false, message: 'خطأ في الخادم.' });
+            socket.emit('historicalPathData', { success: false, message: 'حدث خطأ أثناء جلب المسار.' });
         }
     });
 
