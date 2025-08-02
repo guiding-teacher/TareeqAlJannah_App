@@ -9,15 +9,15 @@ mapboxgl.setRTLTextPlugin(
 // script.js
 
 // ====== إعدادات Mapbox ======
-mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
+mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS-FupIeJ7BGxAXOlEw';
 
 const map = new mapboxgl.Map({
     container: 'map',
     style: 'mapbox://styles/mapbox/streets-v11',
     center: [43.6875, 33.3152],
     zoom: 6,
-    pitch: 45,
-    bearing: -17.6
+    pitch: 45, // ميل افتراضي 3D
+    bearing: -17.6 // دوران افتراضي 3D
 });
 
 // ====== متغيرات عامة ======
@@ -60,10 +60,24 @@ function togglePanel(panelId) {
     }
 }
 
+// هذه الوظيفة تربط معالجات أحداث الإغلاق
+document.querySelectorAll('.close-btn').forEach(button => {
+    button.addEventListener('click', (e) => {
+        e.target.closest('.overlay-panel').classList.remove('active');
+        document.querySelectorAll('.main-header nav button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById('showGeneralMapBtn').classList.add('active');
+        showGeneralMap();
+    });
+});
+
 // ====== وظائف الخريطة والمواقع (Map & Location Functions) ======
 
 function createCustomMarker(user) {
+    // تحقق من وجود بيانات الموقع قبل المتابعة (تجنب [0,0] الافتراضية)
     if (!user || !user.location || !user.location.coordinates || (user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
+        console.warn("بيانات الموقع غير صالحة لإنشاء مركر:", user);
         return null;
     }
 
@@ -74,16 +88,19 @@ function createCustomMarker(user) {
     const el = document.createElement('div');
     el.className = 'mapboxgl-marker';
 
+    // إضافة فئة لتحديد مركر المستخدم الحالي مقابل مركر الصديق لتغيير لون الإطار
     if (user.userId === currentUser.userId) {
-        el.classList.add('current-user-marker');
+        el.classList.add('current-user-marker'); // لجعل الإطار أخضر
     } else {
-        el.classList.add('friend-marker');
+        el.classList.add('friend-marker'); // لجعل الإطار أزرق
     }
+
 
     if (currentUser && user.userId === currentUser.userId && currentUser.settings.stealthMode) {
         el.classList.add('stealth-mode');
     }
 
+    // استخدم الصورة الافتراضية إذا كانت صورة المستخدم غير متوفرة أو فارغة
     const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER';
 
     el.innerHTML = `
@@ -96,6 +113,7 @@ function createCustomMarker(user) {
         .setLngLat(user.location.coordinates)
         .addTo(map);
 
+    // ربط حدث النقر على مركر الصديق (وليس المستخدم الحالي)
     if (user.userId !== currentUser.userId) {
         marker.getElement().addEventListener('click', () => {
             showFriendDetailsPopup(user);
@@ -107,11 +125,13 @@ function createCustomMarker(user) {
 }
 
 function showFriendDetailsPopup(friend) {
+    // إزالة أي PopUp سابق لنفس المركر لضمان عدم التكرار
     const existingPopup = friendMarkers[friend.userId]?._popup;
     if (existingPopup) {
         existingPopup.remove();
     }
     
+    // تحقق أدق من توفر بيانات الموقع الحقيقية لك وللصديق
     const currentUserHasValidLocation = currentUser && currentUser.location && currentUser.location.coordinates && (currentUser.location.coordinates[0] !== 0 || currentUser.location.coordinates[1] !== 0);
     const friendHasValidLocation = friend && friend.location && friend.location.coordinates && (friend.location.coordinates[0] !== 0 || friend.location.coordinates[1] !== 0);
 
@@ -158,9 +178,9 @@ function showFriendDetailsPopup(friend) {
             }
         });
         document.getElementById(`chatFriendBtn-${friend.userId}`).addEventListener('click', () => {
-            currentChatFriendId = friend.userId;
-            setupBottomChatBar();
-            document.getElementById('bottomChatBar').classList.add('active');
+            currentChatFriendId = friend.userId; // تعيين الصديق المحدد للدردشة
+            setupBottomChatBar(); // تحديث شريط الدردشة السفلي
+            document.getElementById('bottomChatBar').classList.add('active'); // إظهار شريط الدردشة السفلي
             popup.remove();
         });
     });
@@ -466,7 +486,6 @@ function startLocationTracking() {
     navigator.geolocation.watchPosition(
         async (position) => {
             const { longitude, latitude } = position.coords;
-
             socket.emit('updateLocation', {
                 userId: currentUser.userId,
                 location: [longitude, latitude],
@@ -682,6 +701,7 @@ function setupBottomChatBar() {
 
 // ====== التعامل مع أحداث WebSocket من الخادم ======
 
+// 0. تسجيل المستخدم عند الاتصال لأول مرة
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId');
     if (!userId) {
@@ -710,6 +730,8 @@ socket.on('currentUserData', (user) => {
     localStorage.setItem('appUserEmail', currentUser.email || '');
     localStorage.setItem('appEmergencyWhatsapp', currentUser.settings.emergencyWhatsapp || '');
 
+
+    // تحديث الواجهة ببيانات المستخدم الأولية
     document.getElementById('userName').textContent = currentUser.name;
     document.getElementById('userPhoto').src = currentUser.photo;
     document.getElementById('userLinkCode').textContent = currentUser.linkCode;
@@ -719,10 +741,12 @@ socket.on('currentUserData', (user) => {
     document.getElementById('editPhoneInput').value = currentUser.phone || '';
     document.getElementById('editEmailInput').value = currentUser.email || '';
 
+    // تحديث حقول المعلومات الأولية في لوحة initialInfoPanel
     document.getElementById('initialInfoNameInput').value = currentUser.name;
     document.getElementById('initialInfoGenderSelect').value = currentUser.gender || 'other';
     document.getElementById('initialInfoPhoneInput').value = currentUser.phone || '';
     document.getElementById('initialInfoEmailInput').value = currentUser.email || '';
+
 
     document.getElementById('shareLocationToggle').checked = currentUser.settings.shareLocation;
     document.getElementById('soundToggle').checked = currentUser.settings.sound;
@@ -735,12 +759,13 @@ socket.on('currentUserData', (user) => {
         socket.emit('requestFriendsData', { friendIds: currentUser.linkedFriends });
     }
 
+    // إظهار لوحة المعلومات الأولية إذا كانت البيانات غير مكتملة
     const storedName = localStorage.getItem('appUserName');
     const storedGender = localStorage.getItem('appUserGender');
     const storedPhone = localStorage.getItem('appUserPhone');
     const storedEmail = localStorage.getItem('appUserEmail');
 
-    if (!storedName || !storedGender || storedGender === 'other' || !storedPhone || !storedEmail) {
+    if (!storedName || storedGender === 'other' || !storedPhone || !storedEmail) {
         document.getElementById('initialInfoPanel').classList.add('active');
     } else {
         document.getElementById('initialInfoPanel').classList.remove('active');
@@ -751,6 +776,7 @@ socket.on('locationUpdate', (data) => {
     let userToUpdate;
     if (data.userId === currentUser.userId) {
         currentUser.location = data.location;
+        currentUser.battery = data.battery;
         currentUser.batteryStatus = data.battery;
         currentUser.settings = data.settings;
         currentUser.lastSeen = data.lastSeen;
@@ -762,6 +788,7 @@ socket.on('locationUpdate', (data) => {
         userToUpdate = linkedFriends.find(f => f.userId === data.userId);
         if (userToUpdate) {
             userToUpdate.location = data.location;
+            userToUpdate.battery = data.battery;
             userToUpdate.batteryStatus = data.battery;
             userToUpdate.settings = data.settings;
             userToUpdate.lastSeen = data.lastSeen;
@@ -774,6 +801,7 @@ socket.on('locationUpdate', (data) => {
                 name: data.name,
                 photo: data.photo,
                 location: data.location,
+                battery: data.battery,
                 batteryStatus: data.battery,
                 settings: data.settings,
                 lastSeen: data.lastSeen,
@@ -917,8 +945,8 @@ socket.on('historicalPathData', (data) => {
             const coordinates = data.path.map(loc => loc.location.coordinates);
             drawHistoricalPath(data.userId, coordinates);
             alert(`تم عرض المسار التاريخي لـ ${data.userId}.`);
-            togglePanel(null); // لإغلاق جميع اللوحات
-            document.getElementById('showFriendsMapBtn').classList.add('active'); // إعطاء التركيز لزر خريطة الأصدقاء
+            togglePanel(null);
+            document.getElementById('showFriendsMapBtn').classList.add('active');
             showFriendsMap();
         } else {
             alert(`لا توجد بيانات مسار تاريخي لـ ${data.userId} في هذا النطاق.`);
@@ -952,11 +980,11 @@ map.on('load', () => {
     document.getElementById('showGeneralMapBtn').classList.add('active');
 });
 
-// ====== هذا الجزء يضمن ربط الأحداث بعد تحميل الصفحة ======
 document.addEventListener('DOMContentLoaded', () => {
+
     // ربط معالجات الأحداث للأزرار الرئيسية
     document.getElementById('showGeneralMapBtn').addEventListener('click', () => {
-        if (linkedFriends.length > 0 && document.getElementById('showFriendsMapBtn') && document.getElementById('showFriendsMapBtn').classList.contains('active')) {
+        if (linkedFriends.length > 0 && document.getElementById('showFriendsMapBtn').classList.contains('active')) {
             if (!confirm("هل أنت متأكد أنك تريد مغادرة خريطة الأصدقاء والعودة للخريطة العامة؟")) {
                 return;
             }
@@ -986,14 +1014,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('editGenderSelect').value = currentUser.gender || 'other';
         document.getElementById('editPhoneInput').value = currentUser.phone || '';
         document.getElementById('editEmailInput').value = currentUser.email || '';
+
         togglePanel('profilePanel');
         showFriendsMap();
     });
 
     document.getElementById('generateCodeBtn').addEventListener('click', () => {
-        alert('طلب رمز ربط جديد غير متاح حالياً (هذه ميزة محاكاة - تتطلب الواجهة الخلفية).');
+        alert('طلب رمز ربط جديد غير متاح حالياً.');
     });
-    
+
     document.getElementById('copyLinkCodeBtn').addEventListener('click', () => {
         const linkCode = document.getElementById('userLinkCode').textContent;
         if (linkCode) {
@@ -1001,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('تم نسخ رمز الربط إلى الحافظة!');
             }).catch(err => {
                 console.error('فشل نسخ رمز الربط:', err);
-                alert('فشل نسخ رمز الربط. الرجاء المحاولة يدوياً.');
+                alert('فشل نسخ رمز الربط.');
             });
         }
     });
@@ -1299,6 +1328,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(`وضع التخفي: ${e.target.checked ? 'مفعّل (لن تظهر على الخريطة للآخرين)' : 'معطل (ستظهر على الخريطة)'}. (تم الإرسال للخادم).`);
     });
 
+    // معالج لزر حفظ رقم الواتساب للطوارئ
     const updateEmergencyWhatsappBtn = document.getElementById('updateEmergencyWhatsappBtn');
     if (updateEmergencyWhatsappBtn) {
         updateEmergencyWhatsappBtn.addEventListener('click', () => {
@@ -1315,6 +1345,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // معالجات التحكم بـ 3D الخريطة
     const mapPitchInput = document.getElementById('mapPitch');
     const mapBearingInput = document.getElementById('mapBearing');
     if (mapPitchInput && mapBearingInput) {
