@@ -6,10 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طريق الجنة - تحديد المواقع والمراسلة المخصص للعراق</title>
     <!-- Mapbox GL JS CSS -->
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
- <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
+     <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -19,15 +17,11 @@
     <header class="main-header">
         <h1>طريق الجنة</h1>
         <nav>
-            <!-- زر الخريطة العامة - أول زر يفتح -->
             <button id="showGeneralMapBtn" title="الخريطة العامة" class="active"><i class="fas fa-globe-americas"></i> الخريطة</button>
-            <!-- الزر الجديد: خريطة الأصدقاء -->
             <button id="showFriendsMapBtn" title="خريطة الأصدقاء والربط"><i class="fas fa-handshake"></i> أصدقائي</button>
             <button id="showProfileBtn" title="الملف الشخصي"><i class="fas fa-user"></i></button>
             <button id="showConnectBtn" title="ربط حساب"><i class="fas fa-link"></i></button>
-            <button id="showChatBtn" title="الرسائل"><i class="fas fa-comments"></i></button>
             <button id="showFeaturesBtn" title="ميزات إضافية"><i class="fas fa-bars"></i></button>
-            <!-- زر الإعدادات والخصوصية -->
             <button id="showSettingsBtn" title="الإعدادات والخصوصية"><i class="fas fa-cog"></i></button>
         </nav>
         <button id="sosButton" class="sos-btn" title="زر الطوارئ"><i class="fas fa-exclamation-triangle"></i> SOS</button>
@@ -40,11 +34,24 @@
         <select id="bottomChatFriendSelect"></select>
         <input type="text" id="bottomChatInput" placeholder="اكتب رسالتك هنا...">
         <button id="bottomChatSendBtn"><i class="fas fa-paper-plane"></i></button>
+        <button id="toggleChatHistoryBtn" title="سجل الدردشة"><i class="fas fa-history"></i></button> <!-- جديد -->
     </div>
 
 
     <!-- لوحة المعلومات الأولية (تظهر عند بدء التشغيل إذا كانت بيانات المستخدم ناقصة) -->
-    <!-- هذه اللوحة يتم إضافتها برمجياً بواسطة script.js لضمان أنها تظهر كأولوية -->
+    <div class="overlay-panel" id="initialInfoPanel">
+        <h2><i class="fas fa-info-circle"></i> معلوماتك الشخصية</h2>
+        <p>الرجاء إدخال معلوماتك لإنشاء ملفك الشخصي.</p>
+        <input type="text" id="initialInfoNameInput" placeholder="اسمك">
+        <select id="initialInfoGenderSelect">
+            <option value="other">الجنس</option>
+            <option value="male">ذكر</option>
+            <option value="female">أنثى</option>
+        </select>
+        <input type="tel" id="initialInfoPhoneInput" placeholder="رقم هاتفك">
+        <input type="email" id="initialInfoEmailInput" placeholder="بريدك الإلكتروني">
+        <button id="initialInfoConfirmBtn"><i class="fas fa-check-circle"></i> تأكيد</button>
+    </div>
 
     <!-- لوحة الملف الشخصي -->
     <div class="overlay-panel" id="profilePanel">
@@ -54,7 +61,19 @@
             <p><strong>الاسم:</strong> <span id="userName">اسم المستخدم</span></p>
             <p><strong>رمز الربط:</strong> <span id="userLinkCode">ABCD123</span> <button id="copyLinkCodeBtn" style="width: auto; padding: 5px 10px; margin-right: 5px;"><i class="fas fa-copy"></i> نسخ</button></p>
             <button id="generateCodeBtn"><i class="fas fa-sync-alt"></i> توليد رمز جديد</button>
-            <!-- حقول تغيير الاسم ستضاف برمجياً بواسطة JavaScript -->
+            <!-- جديد: قسم تعديل معلومات المستخدم الأساسية -->
+            <div class="feature-section" style="margin-top: 20px;">
+                <h3><i class="fas fa-user-edit"></i> تعديل معلوماتك</h3>
+                <input type="text" id="editUserNameInput" placeholder="اسمك الجديد">
+                <select id="editGenderSelect">
+                    <option value="other">الجنس</option>
+                    <option value="male">ذكر</option>
+                    <option value="female">أنثى</option>
+                </select>
+                <input type="tel" id="editPhoneInput" placeholder="رقم هاتفك">
+                <input type="email" id="editEmailInput" placeholder="بريدك الإلكتروني">
+                <button id="updateProfileInfoBtn"><i class="fas fa-save"></i> حفظ التغييرات</button>
+            </div>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
@@ -66,11 +85,8 @@
         <button id="connectFriendBtn"><i class="fas fa-plus-circle"></i> ربط</button>
         <div id="linkedFriendsList">
             <h3><i class="fas fa-users"></i> الأصدقاء المرتبطون:</h3>
-            <ul id="friendsList">
-                <!-- الأصدقاء المرتبطون سيتم إضافتهم هنا -->
-            </ul>
+            <ul id="friendsList"></ul>
         </div>
-        <!-- جديد: قسم لربط المجموعات -->
         <div class="feature-section" style="margin-top: 20px;">
             <h3><i class="fas fa-users-cog"></i> إدارة المجموعات</h3>
             <p class="feature-info">ميزة لربط مجموعة من الأصدقاء معاً. (قيد التطوير).</p>
@@ -80,13 +96,14 @@
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة المراسلة (أصبحت الآن تعرض فقط سجل الدردشة، بينما الإدخال في الشريط السفلي) -->
+    <!-- لوحة المراسلة (سجل الدردشة) -->
     <div class="overlay-panel" id="chatPanel">
         <h2><i class="fas fa-comment-alt"></i> سجل المراسلات</h2>
-        <!-- حقل اختيار الصديق سيضاف برمجياً بواسطة JavaScript (setupChatPanel) -->
-        <div id="chatMessages">
-            <!-- الرسائل ستظهر هنا -->
+        <div class="chat-header" style="margin-bottom: 10px;">
+            <label for="chatFriendSelect" style="display: block; margin-bottom: 5px; color: #555;">الدردشة مع:</label>
+            <select id="chatFriendSelect" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;"></select>
         </div>
+        <div id="chatMessages"></div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
@@ -95,8 +112,11 @@
         <h2><i class="fas fa-cogs"></i> ميزات إضافية</h2>
         <div class="feature-section">
             <h3><i class="fas fa-route"></i> تتبع المسار التاريخي</h3>
-            <p class="feature-info">عرض مسار تنقل الأصدقاء في الماضي. (يتطلب الواجهة الخلفية).</p>
-            <!-- حقول اختيار المستخدم وزري العرض والمسح ستضاف برمجياً -->
+            <p class="feature-info">عرض مسار تنقل الأصدقاء في الماضي.</p>
+            <label for="historicalPathUserSelect">اختر المستخدم:</label>
+            <select id="historicalPathUserSelect"></select>
+            <button id="viewHistoricalPathBtn"><i class="fas fa-calendar-alt"></i> عرض السجل</button>
+            <button id="clearHistoricalPathBtn"><i class="fas fa-eraser"></i> مسح المسار</button>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-globe-africa"></i> التحكم بـ 3D الخريطة</h3>
@@ -110,73 +130,43 @@
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-shield-alt"></i> المناطق الآمنة / الخطرة</h3>
-            <p class="feature-info">عرض مناطق محددة (آمنة/خطرة) على الخريطة. (بيانات من الواجهة الخلفية).</p>
+            <p class="feature-info">عرض مناطق محددة. (قيد التطوير).</p>
             <button disabled><i class="fas fa-eye"></i> إظهار المناطق</button>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-map-marker-alt"></i> نقاط الاهتمام المجتمعية (POIs)</h3>
-            <p class="feature-info">إضافة ومشاركة مواقع مهمة (استراحات، مراكز صحية...). (يتطلب الواجهة الخلفية).</p>
-            <!-- زر إضافة استراحة وحقول الأيقونات ستضاف برمجياً -->
-            <button disabled><i class="fas fa-list"></i> عرض النقاط</button>
-        </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-microphone-alt"></i> الأدلة الصوتية</h3>
-            <p class="feature-info">تشغيل دليل صوتي عند الاقتراب من المواقع المقدسة. (يتطلب الواجهة الخلفية).</p>
-            <label class="switch">
-                <input type="checkbox" id="audioGuideToggle">
-                <span class="slider round"></span>
-            </label>
-        </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-bell"></i> تنبيهات القرب</h3>
-            <p class="feature-info">تلقي تنبيهات عند اقتراب الأصدقاء أو الوصول لوجهة. (يتطلب الواجهة الخلفية).</p>
-            <label class="switch">
-                <input type="checkbox" id="proximityAlertToggle">
-                <span class="slider round"></span>
-            </label>
+            <p class="feature-info">إضافة ومشاركة مواقع مهمة (استراحات، إلخ).</p>
+            <label for="poiIconSelect">اختر أيقونة:</label>
+            <select id="poiIconSelect"></select>
+            <button id="addRestAreaBtn"><i class="fas fa-bed"></i> إضافة نقطة اهتمام</button>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-mosque"></i> أوقات الصلاة</h3>
-            <div id="prayerTimesDisplay">
-                <!-- أوقات الصلاة ستظهر هنا -->
-                <p>الفجر: --:--</p>
-                <p>الظهر: --:--</p>
-                <p>العصر: --:--</p>
-                <p>المغرب: --:--</p>
-                <p>العشاء: --:--</p>
-            </div>
+            <div id="prayerTimesDisplay"></div>
             <button id="refreshPrayerTimesBtn"><i class="fas fa-redo"></i> تحديث</button>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-battery-full"></i> حالة البطارية (الأصدقاء)</h3>
-            <p class="feature-info">عرض مستوى بطارية هواتف الأصدقاء. (يتطلب الواجهة الخلفية وموافقة المستخدم).</p>
-            <ul id="friendBatteryStatus">
-                <li>صديق 1: 85%</li>
-                <li>صديق 2: 60%</li>
-            </ul>
+            <ul id="friendBatteryStatus"></ul>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-handshake"></i> وضع التجمع</h3>
-            <p class="feature-info">تحديد نقطة تجمع على الخريطة للجميع.</p>
             <input type="text" id="meetingPointInput" placeholder="اسم نقطة التجمع">
             <button id="setMeetingPointBtn"><i class="fas fa-crosshairs"></i> تحديد النقطة</button>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة الإعدادات والخصوصية الجديدة -->
+    <!-- لوحة الإعدادات والخصوصية -->
     <div class="overlay-panel" id="settingsPanel">
         <h2><i class="fas fa-sliders-h"></i> الإعدادات والخصوصية</h2>
-        <!-- تم نقل معلومات المستخدم إلى لوحة الملف الشخصي -->
         <div class="feature-section">
             <h3><i class="fas fa-phone-alt"></i> رقم الواتساب للطوارئ</h3>
-            <p class="feature-info">أدخل رقم هاتف واتساب لإرسال تنبيهات SOS إليه. (مثال: 9647xxxxxxxxxx).</p>
             <input type="tel" id="emergencyWhatsappInput" placeholder="رقم واتساب (مثال: 9647xxxxxxxxx)">
             <button id="updateEmergencyWhatsappBtn"><i class="fas fa-save"></i> حفظ الرقم</button>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-location-arrow"></i> مشاركة الموقع</h3>
-            <p class="feature-info">التحكم في رؤية موقعك للأصدقاء المرتبطين.</p>
             <label class="switch">
                 <input type="checkbox" id="shareLocationToggle" checked>
                 <span class="slider round"></span>
@@ -184,7 +174,6 @@
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-volume-up"></i> إعدادات الصوت</h3>
-            <p class="feature-info">تشغيل/إيقاف أصوات الإشعارات والتنبيهات.</p>
             <label class="switch">
                 <input type="checkbox" id="soundToggle" checked>
                 <span class="slider round"></span>
@@ -192,7 +181,6 @@
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-eye-slash"></i> إخفاء فقاعات الرسائل</h3>
-            <p class="feature-info">عدم عرض فقاعات الرسائل فوق صور الأصدقاء على الخريطة.</p>
             <label class="switch">
                 <input type="checkbox" id="hideBubblesToggle">
                 <span class="slider round"></span>
@@ -200,16 +188,10 @@
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-user-secret"></i> وضع التخفي</h3>
-            <p class="feature-info">إخفاء صورتك واسمك من الأصدقاء الآخرين على الخريطة.</p>
             <label class="switch">
                 <input type="checkbox" id="stealthModeToggle">
                 <span class="slider round"></span>
             </label>
-        </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-history"></i> مسح سجل الدردشة</h3>
-            <p class="feature-info">مسح جميع رسائلك المحفوظة. (يتطلب الواجهة الخلفية).</p>
-            <button disabled><i class="fas fa-eraser"></i> مسح الدردشة</button>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
@@ -217,7 +199,7 @@
 
     <!-- Mapbox GL JS Library -->
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
-    <!-- Socket.IO Client (يحتاج إلى خادم Socket.IO) -->
+    <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script src="script.js"></script>
 </body>
