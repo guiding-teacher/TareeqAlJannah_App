@@ -714,6 +714,7 @@ socket.on('connect', () => {
     const email = localStorage.getItem('appUserEmail') || null;
     const emergencyWhatsapp = localStorage.getItem('appEmergencyWhatsapp') || null;
 
+    // إرسال جميع البيانات عند التسجيل/التحديث
     socket.emit('registerUser', { userId, name: userName, photo: userPhoto, gender: gender, phone: phone, email: email, emergencyWhatsapp: emergencyWhatsapp });
     console.log('تم إرسال طلب تسجيل المستخدم إلى الخادم:', userId);
 });
@@ -1357,7 +1358,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 }); // نهاية DOMContentLoaded
-
 
 // وظائف محاكاة الأصوات
 function playNotificationSound() {
