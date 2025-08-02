@@ -325,12 +325,15 @@ body {
     object-fit: cover;
     box-shadow: var(--shadow);
     animation: pulse 1.5s infinite alternate;
-    /* لجعل مركر المستخدم الحالي أخضر، ومركر الأصدقاء أزرق */
-    border: 4px solid var(--accent-color); /* افتراضي: أخضر */
 }
 
-/* لجعل مركر الصديق بلون مختلف (مثلاً أزرق) */
-.mapboxgl-marker.friend-marker .user-marker-photo {
+/* لجعل مركر المستخدم الحالي أخضر */
+.current-user-marker .user-marker-photo {
+    border: 4px solid var(--accent-color);
+}
+
+/* لجعل مركر الصديق بلون مختلف (أزرق) */
+.friend-marker .user-marker-photo {
     border: 4px solid var(--primary-color);
 }
 
@@ -542,6 +545,62 @@ input:checked + .slider:before {
     transform: translateX(26px);
 }
 
+/* جديد: شريط الدردشة الثابت */
+.bottom-chat-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #fff;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    gap: 10px;
+    z-index: 15;
+    /* لإصلاح مشكلة الحروف العربية المتقطعة */
+    direction: rtl;
+    unicode-bidi: embed;
+    transform: translateY(100%); /* إخفاء الشريط افتراضياً */
+    transition: transform 0.3s ease-in-out;
+}
+
+.bottom-chat-bar.active {
+    transform: translateY(0); /* إظهار الشريط */
+}
+
+#bottomChatFriendSelect {
+    flex-basis: 150px;
+    padding: 8px;
+    border-radius: var(--border-radius);
+    border: 1px solid #ccc;
+    font-size: 0.9em;
+}
+
+#bottomChatInput {
+    flex-grow: 1;
+    padding: 8px 12px;
+    border-radius: var(--border-radius);
+    border: 1px solid #ccc;
+    font-size: 0.9em;
+}
+
+#bottomChatSendBtn,
+#toggleChatHistoryBtn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 1.1em;
+}
+
+#toggleChatHistoryBtn {
+    background-color: var(--secondary-color);
+}
+
+
 /* Responsive Design for smaller screens */
 @media (max-width: 768px) {
     .main-header {
@@ -594,54 +653,17 @@ input:checked + .slider:before {
     .feature-section h3 {
         font-size: 1.1em;
     }
-}
 
-/* جديد: شريط الدردشة الثابت */
-.bottom-chat-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: #fff;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-    display: flex;
-    align-items: center;
-    padding: 10px;
-    gap: 10px;
-    z-index: 15;
-    /* لإصلاح مشكلة الحروف العربية المتقطعة */
-    direction: rtl;
-    unicode-bidi: embed;
-    transform: translateY(100%); /* إخفاء الشريط افتراضياً */
-    transition: transform 0.3s ease-in-out;
-}
+    .bottom-chat-bar {
+        padding: 5px;
+        gap: 5px;
+    }
 
-.bottom-chat-bar.active {
-    transform: translateY(0); /* إظهار الشريط */
-}
-
-#bottomChatFriendSelect {
-    flex-basis: 150px;
-    padding: 8px;
-    border-radius: var(--border-radius);
-    border: 1px solid #ccc;
-    font-size: 0.9em;
-}
-
-#bottomChatInput {
-    flex-grow: 1;
-    padding: 8px 12px;
-    border-radius: var(--border-radius);
-    border: 1px solid #ccc;
-    font-size: 0.9em;
-}
-
-#bottomChatSendBtn {
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: var(--border-radius);
-    padding: 8px 15px;
-    cursor: pointer;
-    font-size: 1.1em;
+    #bottomChatFriendSelect,
+    #bottomChatInput,
+    #bottomChatSendBtn,
+    #toggleChatHistoryBtn {
+        font-size: 0.8em;
+        padding: 6px;
+    }
 }
