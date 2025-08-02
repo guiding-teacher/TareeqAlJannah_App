@@ -8,8 +8,8 @@
     --bg-color: #f8f9fa; /* لون خلفية فاتح */
     --text-color: #343a40; /* لون النص الداكن */
     --panel-bg: rgba(255, 255, 255, 0.95);
-    --border-radius: 12px; /* تم زيادة */
-    --shadow: 0 6px 20px rgba(0, 0, 0, 0.15); /* تم تحسين الظل */
+    --border-radius: 12px;
+    --shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 body {
@@ -24,7 +24,7 @@ body {
 }
 
 .main-header {
-    background-image: linear-gradient(to right, #0056b3, var(--primary-color)); /* تدرج لوني */
+    background-image: linear-gradient(to right, #0056b3, var(--primary-color));
     color: white;
     padding: 15px 20px;
     display: flex;
@@ -121,7 +121,7 @@ body {
     z-index: 1;
 }
 
-/* Overlay Panels (Profile, Connect, Chat, Features, Settings) */
+/* Overlay Panels (Profile, Connect, Chat, Features, Settings, initialInfoPanel) */
 .overlay-panel {
     position: absolute;
     top: 50%;
@@ -134,7 +134,7 @@ body {
     min-width: 350px;
     max-width: 90%;
     z-index: 20;
-    display: none;
+    display: none; /* مخفي افتراضياً */
     flex-direction: column;
     gap: 20px;
     backdrop-filter: blur(8px);
@@ -148,8 +148,15 @@ body {
 }
 
 .overlay-panel.active {
-    display: flex;
+    display: flex; /* يظهر عندما يكون نشطاً */
 }
+
+/* الإظهار الإجباري للوحة المعلومات الأولية */
+#initialInfoPanel.active {
+    display: flex;
+    z-index: 100; /* ليكون فوق كل شيء */
+}
+
 
 @keyframes fadeIn {
     from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
@@ -168,8 +175,9 @@ body {
 }
 
 .overlay-panel input[type="text"],
-.overlay-panel input[type="tel"], /* جديد: لرقم الواتساب */
-.overlay-panel select, /* جديد: لاختيار الأيقونة والصديق */
+.overlay-panel input[type="tel"],
+.overlay-panel input[type="email"], /* جديد: لحقل البريد الإلكتروني */
+.overlay-panel select,
 .overlay-panel button {
     width: 100%;
     padding: 14px;
@@ -278,6 +286,7 @@ body {
     direction: rtl;
     unicode-bidi: embed;
     text-align: right; /* لتنسيق النص العربي */
+    word-break: break-word; /* لكسر الكلمات الطويلة */
 }
 
 .message.sent {
@@ -287,7 +296,7 @@ body {
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     text-align: right;
 }
-.message-meta { /* جديد: لتاريخ الرسالة واسم المرسل */
+.message-meta {
     font-size: 0.8em;
     color: #888;
     display: block;
@@ -313,11 +322,18 @@ body {
     width: 60px;
     height: 60px;
     border-radius: 50%;
-    border: 4px solid var(--accent-color);
     object-fit: cover;
     box-shadow: var(--shadow);
     animation: pulse 1.5s infinite alternate;
+    /* لجعل مركر المستخدم الحالي أخضر */
+    border: 4px solid var(--accent-color);
 }
+
+/* لجعل مركر الصديق بلون مختلف (مثلاً أزرق) */
+.mapboxgl-marker:not(.stealth-mode) .user-marker-photo {
+    border: 4px solid var(--primary-color);
+}
+
 
 .user-marker-name {
     background-color: rgba(0, 0, 0, 0.75);
@@ -393,10 +409,10 @@ body {
 }
 
 /* POI Marker */
-.poi-marker { /* جديد: لعلامات نقاط الاهتمام */
+.poi-marker {
     width: 45px;
     height: 45px;
-    background-color: #FFC107; /* أصفر */
+    background-color: #FFC107;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -416,7 +432,7 @@ body {
 .meeting-point-marker {
     width: 45px;
     height: 45px;
-    background-color: #17a2b8; /* تركواز */
+    background-color: #17a2b8;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -558,6 +574,7 @@ input:checked + .slider:before {
     }
     .overlay-panel input[type="text"],
     .overlay-panel input[type="tel"],
+    .overlay-panel input[type="email"],
     .overlay-panel select,
     .overlay-panel button {
         padding: 10px;
