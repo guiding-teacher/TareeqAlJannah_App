@@ -33,7 +33,8 @@
     <!-- لوحة المعلومات الأولية (تظهر عند بدء التشغيل إذا كانت بيانات المستخدم ناقصة) -->
     <!-- هذه اللوحة يتم إضافتها برمجياً بواسطة script.js لضمان أنها تظهر كأولوية -->
     <!-- ولكن محتواها سيكون هنا لتسهيل التعديل -->
-    <!-- <div class="overlay-panel" id="initialInfoPanel">
+    <!--
+    <div class="overlay-panel" id="initialInfoPanel">
         <h2><i class="fas fa-info-circle"></i> معلوماتك الشخصية</h2>
         <p>الرجاء إدخال معلوماتك لإنشاء ملفك الشخصي.</p>
         <input type="text" id="initialInfoNameInput" placeholder="اسمك">
@@ -45,7 +46,8 @@
         <input type="tel" id="initialInfoPhoneInput" placeholder="رقم هاتفك">
         <input type="email" id="initialInfoEmailInput" placeholder="بريدك الإلكتروني">
         <button id="initialInfoConfirmBtn"><i class="fas fa-check-circle"></i> تأكيد</button>
-    </div> -->
+    </div>
+    -->
     <!-- ملاحظة: لوحة initialInfoPanel سيتم بناؤها برمجياً في script.js وتضاف إلى body.
          هذا التعليق هنا فقط لتوضيح محتواها المتوقع. -->
 
@@ -73,6 +75,13 @@
                 <!-- الأصدقاء المرتبطون سيتم إضافتهم هنا -->
             </ul>
         </div>
+        <!-- جديد: قسم لربط المجموعات -->
+        <div class="feature-section" style="margin-top: 20px;">
+            <h3><i class="fas fa-users-cog"></i> إدارة المجموعات</h3>
+            <p class="feature-info">ميزة لربط مجموعة من الأصدقاء معاً. (قيد التطوير).</p>
+            <button disabled><i class="fas fa-plus"></i> إنشاء مجموعة</button>
+            <button disabled><i class="fas fa-link"></i> ربط بمجموعة</button>
+        </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
@@ -97,6 +106,16 @@
             <h3><i class="fas fa-route"></i> تتبع المسار التاريخي</h3>
             <p class="feature-info">عرض مسار تنقل الأصدقاء في الماضي. (يتطلب الواجهة الخلفية).</p>
             <!-- حقول اختيار المستخدم وزري العرض والمسح ستضاف برمجياً -->
+        </div>
+        <div class="feature-section">
+            <h3><i class="fas fa-globe-africa"></i> التحكم بـ 3D الخريطة</h3>
+            <p class="feature-info">تحكم في زاوية وميل عرض الخريطة ثلاثية الأبعاد.</p>
+            <div style="display: flex; flex-direction: column; gap: 5px;">
+                <label for="mapPitch">الميل (Pitch):</label>
+                <input type="range" id="mapPitch" min="0" max="80" value="45">
+                <label for="mapBearing">الدوران (Bearing):</label>
+                <input type="range" id="mapBearing" min="-180" max="180" value="-17.6">
+            </div>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-shield-alt"></i> المناطق الآمنة / الخطرة</h3>
@@ -157,6 +176,24 @@
     <!-- لوحة الإعدادات والخصوصية الجديدة -->
     <div class="overlay-panel" id="settingsPanel">
         <h2><i class="fas fa-sliders-h"></i> الإعدادات والخصوصية</h2>
+        <!-- معلومات المستخدم الأساسية القابلة للتعديل -->
+        <div class="feature-section">
+            <h3><i class="fas fa-user-edit"></i> معلومات الملف الشخصي</h3>
+            <label for="settingNameInput">الاسم:</label>
+            <input type="text" id="settingNameInput" placeholder="اسمك">
+            <label for="settingGenderSelect">الجنس:</label>
+            <select id="settingGenderSelect">
+                <option value="other">الجنس</option>
+                <option value="male">ذكر</option>
+                <option value="female">أنثى</option>
+            </select>
+            <label for="settingPhoneInput">رقم الهاتف:</label>
+            <input type="tel" id="settingPhoneInput" placeholder="رقم هاتفك">
+            <label for="settingEmailInput">البريد الإلكتروني:</label>
+            <input type="email" id="settingEmailInput" placeholder="بريدك الإلكتروني">
+            <button id="updateProfileInfoBtn"><i class="fas fa-save"></i> حفظ المعلومات</button>
+        </div>
+
         <div class="feature-section">
             <h3><i class="fas fa-phone-alt"></i> رقم الواتساب للطوارئ</h3>
             <p class="feature-info">أدخل رقم هاتف واتساب لإرسال تنبيهات SOS إليه. (مثال: 9647xxxxxxxxxx).</p>
