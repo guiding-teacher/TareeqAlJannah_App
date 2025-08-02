@@ -5,7 +5,6 @@ mapboxgl.setRTLTextPlugin(
     null,
     true
   );
-
 // script.js
 
 // ====== إعدادات Mapbox ======
@@ -1358,7 +1357,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 }); // نهاية DOMContentLoaded
-
 
 
 // وظائف محاكاة الأصوات
