@@ -14,8 +14,8 @@ const map = new mapboxgl.Map({
     style: 'mapbox://styles/mapbox/streets-v11',
     center: [43.6875, 33.3152],
     zoom: 6,
-    pitch: 45, // ميل افتراضي 3D
-    bearing: -17.6 // دوران افتراضي 3D
+    pitch: 45,
+    bearing: -17.6
 });
 
 // ====== متغيرات عامة ======
@@ -28,8 +28,12 @@ let currentChatFriendId = null;
 let activeMessageTimers = {};
 let meetingPointMarker = null; // لتخزين مركر نقطة التجمع
 
+// المواقع الرئيسية في العراق (فارغة بناءً على طلبك)
+const holySites = [];
+
 // اتصال Socket.IO
-const socket = io('https://tareeqaljannah-app.onrender.com');
+// const socket = io('http://localhost:3000'); // للتجربة المحلية
+const socket = io('https://tareeqaljannah-app.onrender.com'); // للنسخة المنشورة
 
 
 // ====== وظائف عامة للواجهة الرسومية (UI Helpers) ======
@@ -55,13 +59,9 @@ function togglePanel(panelId) {
     }
 }
 
-// هذه الوظيفة تربط معالجات أحداث الإغلاق
 document.querySelectorAll('.close-btn').forEach(button => {
     button.addEventListener('click', (e) => {
         e.target.closest('.overlay-panel').classList.remove('active');
-        document.querySelectorAll('.main-header nav button').forEach(btn => {
-            btn.classList.remove('active');
-        });
         document.getElementById('showGeneralMapBtn').classList.add('active');
     });
 });
@@ -84,6 +84,10 @@ function createCustomMarker(user) {
         el.classList.add('current-user-marker');
     } else {
         el.classList.add('friend-marker');
+    }
+
+    if (currentUser && user.userId === currentUser.userId && currentUser.settings.stealthMode) {
+        el.classList.add('stealth-mode');
     }
 
     const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER';
@@ -129,34 +133,43 @@ function showFriendDetailsPopup(friend) {
     }
     const lastSeenTime = friend.lastSeen ? new Date(friend.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'غير معروف';
 
+    const friendDetailsHtml = `
+        ${friend.gender && friend.gender !== 'other' ? `<p><i class="fas fa-venus-mars"></i> الجنس: ${friend.gender === 'male' ? 'ذكر' : 'أنثى'}</p>` : ''}
+        ${friend.phone ? `<p><i class="fas fa-phone"></i> الهاتف: ${friend.phone}</p>` : ''}
+        ${friend.email ? `<p><i class="fas fa-envelope"></i> البريد: ${friend.email}</p>` : ''}
+    `;
+
     const popupContent = `
         <h3>${friend.name}</h3>
         <p><i class="fas fa-battery-full"></i> البطارية: ${friend.batteryStatus || 'N/A'}</p>
         ${distanceHtml}
         <p><i class="fas fa-clock"></i> آخر ظهور: ${lastSeenTime}</p>
+        ${friendDetailsHtml}
         <div style="display: flex; justify-content: space-around; margin-top: 10px;">
-            <button onclick="unfriendFromPopup('${friend.userId}', '${friend.name}')" class="unfriend-btn"><i class="fas fa-user-minus"></i> إلغاء الارتباط</button>
-            <button onclick="chatFromPopup('${friend.userId}')" class="chat-friend-btn"><i class="fas fa-comments"></i> دردشة</button>
+            <button id="unfriendBtn-${friend.userId}" class="unfriend-btn"><i class="fas fa-user-minus"></i> إلغاء الارتباط</button>
+            <button id="chatFriendBtn-${friend.userId}" class="chat-friend-btn"><i class="fas fa-comments"></i> دردشة</button>
         </div>
     `;
 
-    new mapboxgl.Popup({ offset: 25 })
+    const popup = new mapboxgl.Popup({ offset: 25 })
         .setLngLat(friend.location.coordinates)
         .setHTML(popupContent)
         .addTo(map);
-}
-// دوال مساعدة لمنع المشاكل مع Popups
-function unfriendFromPopup(friendId, friendName) {
-    if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friendName}؟`)) {
-        socket.emit('unfriendUser', { friendId: friendId });
-    }
-}
-function chatFromPopup(friendId) {
-    currentChatFriendId = friendId;
-    setupBottomChatBar();
-    document.getElementById('bottomChatBar').classList.add('active');
-    // إغلاق جميع popups
-    document.querySelectorAll('.mapboxgl-popup').forEach(p => p.remove());
+
+    popup.on('open', () => {
+        document.getElementById(`unfriendBtn-${friend.userId}`).addEventListener('click', () => {
+            if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friend.name}؟`)) {
+                socket.emit('unfriendUser', { friendId: friend.userId });
+                popup.remove();
+            }
+        });
+        document.getElementById(`chatFriendBtn-${friend.userId}`).addEventListener('click', () => {
+            currentChatFriendId = friend.userId;
+            setupBottomChatBar();
+            document.getElementById('bottomChatBar').classList.add('active');
+            popup.remove();
+        });
+    });
 }
 
 function createPOIMarker(poi) {
@@ -167,42 +180,95 @@ function createPOIMarker(poi) {
     el.className = 'poi-marker';
     el.innerHTML = poi.icon || '<i class="fas fa-map-marker-alt"></i>';
 
-    poiMarkers[poi._id] = new mapboxgl.Marker(el)
+    const marker = new mapboxgl.Marker(el)
         .setLngLat(poi.location.coordinates)
         .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
             <h3>${poi.name}</h3>
             <p>${poi.description || ''}</p>
-            <p><strong>الفئة:</strong> ${poi.category}</p>
+            <p>الفئة: ${poi.category}</p>
         `))
         .addTo(map);
-    return poiMarkers[poi._id];
+
+    poiMarkers[poi._id] = marker;
+    return marker;
 }
 
 function showGeneralMap() {
-    Object.values(friendMarkers).forEach(marker => marker.remove());
+    for (const userId in friendMarkers) {
+        if (friendMarkers[userId]) friendMarkers[userId].remove();
+    }
     Object.keys(friendMarkers).forEach(key => delete friendMarkers[key]);
+
+    for (const poiId in poiMarkers) {
+        if (poiMarkers[poiId]) poiMarkers[poiId].remove();
+    }
+    Object.keys(poiMarkers).forEach(key => delete poiMarkers[key]);
+
     clearHistoricalPath();
+    clearMeetingPointMarker(); // مسح نقطة التجمع عند العودة للخريطة العامة
+
     socket.emit('requestPOIs');
+
     map.flyTo({ center: [43.6875, 33.3152], zoom: 6 });
 }
 
 function showFriendsMap() {
-    Object.values(poiMarkers).forEach(marker => marker.remove());
+    for (const poiId in poiMarkers) {
+        if (poiMarkers[poiId]) poiMarkers[poiId].remove();
+    }
     Object.keys(poiMarkers).forEach(key => delete poiMarkers[key]);
-    clearHistoricalPath();
 
-    Object.values(friendMarkers).forEach(marker => marker.remove());
+    clearHistoricalPath();
+    
+    for (const userId in friendMarkers) {
+        if (friendMarkers[userId]) friendMarkers[userId].remove();
+    }
     Object.keys(friendMarkers).forEach(key => delete friendMarkers[key]);
 
-    if (currentUser?.location?.coordinates && currentUser.settings.shareLocation && !currentUser.settings.stealthMode) {
+    if (currentUser && currentUser.location && currentUser.location.coordinates && !currentUser.settings.stealthMode && currentUser.settings.shareLocation) {
         createCustomMarker(currentUser);
     }
-
+    
     linkedFriends.forEach(friend => {
-        if (friend?.location?.coordinates && friend.settings.shareLocation && !friend.settings.stealthMode) {
+        if (friend.location && friend.location.coordinates && friend.settings && friend.settings.shareLocation && !friend.settings.stealthMode) {
             createCustomMarker(friend);
         }
+        // إظهار نقطة التجمع الخاصة بالصديق
+        if (friend.meetingPoint && friend.meetingPoint.name) {
+             drawMeetingPoint({
+                creatorId: friend.userId,
+                creatorName: friend.name,
+                point: friend.meetingPoint
+            });
+        }
     });
+
+    if (currentUser.meetingPoint && currentUser.meetingPoint.name) {
+        drawMeetingPoint({
+            creatorId: currentUser.userId,
+            creatorName: currentUser.name,
+            point: currentUser.meetingPoint
+        });
+    }
+}
+
+function drawConnectionLine(startCoords, endCoords, layerId) {
+    if (!startCoords || !endCoords) return;
+    const geojson = {
+        'type': 'Feature',
+        'properties': {},
+        'geometry': { 'type': 'LineString', 'coordinates': [startCoords, endCoords] }
+    };
+    if (map.getSource(layerId)) {
+        map.getSource(layerId).setData(geojson);
+    } else {
+        map.addSource(layerId, { 'type': 'geojson', 'data': geojson });
+        map.addLayer({
+            'id': layerId, 'type': 'line', 'source': layerId,
+            'layout': { 'line-join': 'round', 'line-cap': 'round' },
+            'paint': { 'line-color': '#007bff', 'line-width': 4, 'line-dasharray': [0.5, 2] }
+        });
+    }
 }
 
 function clearHistoricalPath() {
@@ -218,34 +284,24 @@ function drawHistoricalPath(userId, pathCoordinates) {
     if (pathCoordinates.length < 2) return;
     const layerId = `historical-path-${userId}`;
     currentHistoricalPathLayer = layerId;
-
     map.addSource(layerId, {
         'type': 'geojson',
-        'data': {
-            'type': 'Feature',
-            'properties': {},
-            'geometry': { 'type': 'LineString', 'coordinates': pathCoordinates }
-        }
+        'data': { 'type': 'Feature', 'properties': {}, 'geometry': { 'type': 'LineString', 'coordinates': pathCoordinates } }
     });
-
     map.addLayer({
         'id': layerId, 'type': 'line', 'source': layerId,
         'layout': { 'line-join': 'round', 'line-cap': 'round' },
         'paint': { 'line-color': '#FF00FF', 'line-width': 6, 'line-opacity': 0.8 }
     });
-
     const bounds = new mapboxgl.LngLatBounds();
     pathCoordinates.forEach(coord => bounds.extend(coord));
     map.fitBounds(bounds, { padding: 50 });
 }
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
 function startLocationTracking() {
@@ -255,6 +311,7 @@ function startLocationTracking() {
         async (position) => {
             const { longitude, latitude } = position.coords;
             socket.emit('updateLocation', {
+                userId: currentUser.userId,
                 location: [longitude, latitude],
                 battery: await getBatteryStatus()
             });
@@ -275,30 +332,32 @@ async function getBatteryStatus() {
 }
 
 function playNotificationSound() {
-    if (currentUser?.settings.sound) new Audio('https://www.soundjay.com/buttons/beep-07.mp3').play().catch(e => {});
+    if (currentUser?.settings.sound) new Audio('https://www.soundjay.com/buttons/beep-07.mp3').play().catch(console.error);
 }
 
 function playSOSSound() {
-    if (currentUser?.settings.sound) new Audio('https://www.soundjay.com/misc/emergency-alert-911-01.mp3').play().catch(e => {});
+    if (currentUser?.settings.sound) new Audio('https://www.soundjay.com/misc/emergency-alert-911-01.mp3').play().catch(console.error);
 }
 
 function sendMessageFromBottomBar() {
     const messageText = document.getElementById('bottomChatInput').value.trim();
-    if (!currentUser || !currentChatFriendId || !messageText) return;
-
-    if (document.getElementById('chatPanel').classList.contains('active')) {
-         addChatMessage(currentUser.name, messageText, 'sent', new Date());
+    if (!currentUser || !currentChatFriendId) return alert("اختر صديق للدردشة أولاً.");
+    if (messageText) {
+        if (document.getElementById('chatPanel').classList.contains('active')) {
+            addChatMessage(currentUser.name, messageText, 'sent', new Date());
+        }
+        socket.emit('chatMessage', { receiverId: currentChatFriendId, message: messageText });
+        if (!currentUser.settings.hideBubbles) showMessageBubble(currentUser.userId, messageText);
+        document.getElementById('bottomChatInput').value = '';
     }
-    socket.emit('chatMessage', { receiverId: currentChatFriendId, message: messageText });
-    if (!currentUser.settings.hideBubbles) showMessageBubble(currentUser.userId, messageText);
-    document.getElementById('bottomChatInput').value = '';
 }
 
 function addChatMessage(senderName, messageText, type = '', timestamp = new Date()) {
     const chatMessages = document.getElementById('chatMessages');
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${type}`;
-    msgDiv.innerHTML = `<span class="message-meta">${senderName} - ${new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><br>${messageText}`;
+    const timeString = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    msgDiv.innerHTML = `<span class="message-meta">${senderName} - ${timeString}</span><br>${messageText}`;
     chatMessages.appendChild(msgDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -315,9 +374,9 @@ function showMessageBubble(userId, messageText) {
 
 function updateFriendBatteryStatus() {
     const list = document.getElementById('friendBatteryStatus');
-    list.innerHTML = linkedFriends.length > 0 ? 
-        linkedFriends.map(friend => `<li>${friend.name}: ${friend.batteryStatus || 'N/A'}</li>`).join('') :
-        '<li>لا يوجد أصدقاء مرتبطون.</li>';
+    list.innerHTML = linkedFriends.length > 0
+        ? linkedFriends.map(friend => `<li>${friend.name}: ${friend.batteryStatus || 'N/A'}</li>`).join('')
+        : '<li>لا يوجد أصدقاء مرتبطون.</li>';
 }
 
 function fetchAndDisplayPrayerTimes() {
@@ -359,9 +418,7 @@ function setupBottomChatBar() {
     const bottomChatFriendSelect = document.getElementById('bottomChatFriendSelect');
     if (linkedFriends.length > 0) {
         bottomChatFriendSelect.innerHTML = linkedFriends.map(f => `<option value="${f.userId}">${f.name}</option>`).join('');
-        if (!currentChatFriendId || !linkedFriends.some(f => f.userId === currentChatFriendId)) {
-            currentChatFriendId = linkedFriends[0].userId;
-        }
+        currentChatFriendId = linkedFriends[0].userId;
         bottomChatFriendSelect.value = currentChatFriendId;
         bottomChatBar.classList.add('active');
     } else {
@@ -392,8 +449,7 @@ function clearMeetingPointMarker() {
 
 function displayMoazebResults(results) {
     const container = document.getElementById('moazebResultsContainer');
-    container.innerHTML = !results || results.length === 0 ?
-        '<p class="feature-info">لا توجد نتائج تطابق بحثك.</p>' :
+    container.innerHTML = !results?.length ? '<p class="feature-info">لا توجد نتائج.</p>' :
         results.map(moazeb => `
             <div class="moazeb-card">
                 <h4>${moazeb.name}</h4>
@@ -404,7 +460,7 @@ function displayMoazebResults(results) {
         `).join('');
 }
 
-// ====== التعامل مع أحداث WebSocket من الخادم ======
+// ====== التعامل مع أحداث WebSocket ======
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId') || 'user_' + Math.random().toString(36).substring(2, 15);
     localStorage.setItem('appUserId', userId);
@@ -422,45 +478,35 @@ socket.on('connect', () => {
 socket.on('currentUserData', (user) => {
     currentUser = user;
     Object.keys(user).forEach(key => localStorage.setItem(`appUser${key.charAt(0).toUpperCase() + key.slice(1)}`, user[key]));
-    localStorage.setItem('appEmergencyWhatsapp', user.settings.emergencyWhatsapp || '');
+    Object.keys(user.settings).forEach(key => localStorage.setItem(`app${key.charAt(0).toUpperCase() + key.slice(1)}`, user.settings[key]));
 
-    // Update UI
     document.getElementById('userName').textContent = user.name;
     document.getElementById('userPhoto').src = user.photo;
     document.getElementById('userLinkCode').textContent = user.linkCode;
-    ['editUserNameInput', 'initialInfoNameInput'].forEach(id => document.getElementById(id).value = user.name);
-    ['editGenderSelect', 'initialInfoGenderSelect'].forEach(id => document.getElementById(id).value = user.gender || 'other');
-    ['editPhoneInput', 'initialInfoPhoneInput'].forEach(id => document.getElementById(id).value = user.phone || '');
-    ['editEmailInput', 'initialInfoEmailInput'].forEach(id => document.getElementById(id).value = user.email || '');
-    document.getElementById('emergencyWhatsappInput').value = user.settings.emergencyWhatsapp || '';
-    Object.keys(user.settings).forEach(key => {
-        const toggle = document.getElementById(`${key}Toggle`);
-        if (toggle) toggle.checked = user.settings[key];
-    });
-
-    startLocationTracking();
-    if (user.linkedFriends?.length > 0) socket.emit('requestFriendsData', { friendIds: user.linkedFriends });
-
-    if (!user.name || (user.gender === 'other') || !user.phone || !user.email) {
-        document.getElementById('initialInfoPanel').classList.add('active');
-    }
-
-    if (user.meetingPoint?.name) {
+    // ... تحديث بقية الواجهة ...
+    
+    if (user.meetingPoint && user.meetingPoint.name) {
         document.getElementById('endMeetingPointBtn').style.display = 'block';
         document.getElementById('setMeetingPointBtn').style.display = 'none';
         document.getElementById('meetingPointInput').value = user.meetingPoint.name;
+    } else {
+        document.getElementById('endMeetingPointBtn').style.display = 'none';
+        document.getElementById('setMeetingPointBtn').style.display = 'block';
     }
+
+    startLocationTracking();
+    if (user.linkedFriends?.length) socket.emit('requestFriendsData', { friendIds: user.linkedFriends });
 });
 
 socket.on('locationUpdate', (data) => {
     let userToUpdate = (currentUser && data.userId === currentUser.userId) ? currentUser : linkedFriends.find(f => f.userId === data.userId);
     if (userToUpdate) {
         Object.assign(userToUpdate, data);
-        userToUpdate.location = { type: 'Point', coordinates: data.location };
-        if (!data.settings.shareLocation || data.settings.stealthMode) {
-            if (friendMarkers[data.userId]) {
-                friendMarkers[data.userId].remove();
-                delete friendMarkers[data.userId];
+        userToUpdate.location.coordinates = data.location; // تصحيح
+        if (!userToUpdate.settings.shareLocation || userToUpdate.settings.stealthMode) {
+            if (friendMarkers[userToUpdate.userId]) {
+                friendMarkers[userToUpdate.userId].remove();
+                delete friendMarkers[userToUpdate.userId];
             }
         } else {
             createCustomMarker(userToUpdate);
@@ -468,40 +514,29 @@ socket.on('locationUpdate', (data) => {
     }
 });
 
-socket.on('updateFriendsList', (friendsData) => {
-    linkedFriends = friendsData;
-    showFriendsMap();
-    setupBottomChatBar();
-    updateFriendBatteryStatus();
-});
-
 socket.on('prayerTimesData', (data) => {
-    const el = document.getElementById('prayerTimesDisplay');
+    const displayElement = document.getElementById('prayerTimesDisplay');
     if (data.success) {
-        el.innerHTML = `
-            <p><strong>الفجر:</strong> ${data.timings.Fajr}</p>
-            <p><strong>الظهر:</strong> ${data.timings.Dhuhr}</p>
-            <p><strong>العصر:</strong> ${data.timings.Asr}</p>
-            <p><strong>المغرب:</strong> ${data.timings.Maghrib}</p>
-            <p><strong>العشاء:</strong> ${data.timings.Isha}</p>
-        `;
+        displayElement.innerHTML = Object.entries(data.timings)
+            .filter(([key]) => ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'].includes(key))
+            .map(([key, value]) => `<p><strong>${key}:</strong> ${value}</p>`).join('');
     } else {
-        el.innerHTML = `<p style="color:red;">${data.message}</p>`;
+        displayElement.innerHTML = `<p style="color:red;">${data.message}</p>`;
     }
 });
 
 socket.on('newMeetingPoint', (data) => {
     drawMeetingPoint(data);
-    if (currentUser?.userId === data.creatorId) {
+    if (currentUser && data.creatorId === currentUser.userId) {
         document.getElementById('endMeetingPointBtn').style.display = 'block';
         document.getElementById('setMeetingPointBtn').style.display = 'none';
-        alert(`تم تحديد نقطة التجمع "${data.point.name}" بنجاح.`);
+        alert(`تم تحديد نقطة التجمع "${data.point.name}".`);
     }
 });
 
 socket.on('meetingPointCleared', (data) => {
     clearMeetingPointMarker();
-    if (currentUser?.userId === data.creatorId) {
+    if (currentUser && data.creatorId === currentUser.userId) {
         document.getElementById('endMeetingPointBtn').style.display = 'none';
         document.getElementById('setMeetingPointBtn').style.display = 'block';
         document.getElementById('meetingPointInput').value = '';
@@ -511,38 +546,48 @@ socket.on('meetingPointCleared', (data) => {
 
 socket.on('moazebStatus', (data) => {
     alert(data.message);
-    if (data.success) {
-        ['addMoazebName', 'addMoazebAddress', 'addMoazebPhone', 'addMoazebGov', 'addMoazebDist'].forEach(id => document.getElementById(id).value = '');
-    }
+    if(data.success) ['addMoazebName', 'addMoazebAddress', 'addMoazebPhone', 'addMoazebGov', 'addMoazebDist'].forEach(id => document.getElementById(id).value = '');
 });
 
 socket.on('moazebSearchResults', (data) => data.success ? displayMoazebResults(data.results) : alert('خطأ في البحث.'));
 
 socket.on('linkStatus', (data) => {
     alert(data.message);
-    if (data.success) document.getElementById('showFriendsMapBtn').click();
+    if(data.success) document.getElementById('showFriendsMapBtn').click();
 });
 
 socket.on('unfriendStatus', (data) => {
     alert(data.message);
-    if (data.success) document.getElementById('showFriendsMapBtn').click();
+    if(data.success) document.getElementById('showFriendsMapBtn').click();
+});
+
+socket.on('updateFriendsList', (friendsData) => {
+    linkedFriends = friendsData;
+    showFriendsMap();
+    setupBottomChatBar();
+    updateFriendBatteryStatus();
 });
 
 socket.on('newChatMessage', (data) => {
-    if (currentUser?.userId === data.receiverId) {
-        playNotificationSound();
-        if (!currentUser.settings.hideBubbles) showMessageBubble(data.senderId, data.message);
-        if (currentChatFriendId === data.senderId && document.getElementById('chatPanel').classList.contains('active')) {
-            addChatMessage(data.senderName, data.message, 'received', data.timestamp);
+    if (currentUser?.receiverId === currentUser.userId) { // خطأ، يجب أن يكون data.receiverId
+        if (data.receiverId === currentUser.userId) {
+            if (!currentUser.settings.hideBubbles) showMessageBubble(data.senderId, data.message);
+            if (currentUser.settings.sound) playNotificationSound();
+            if (data.senderId === currentChatFriendId && document.getElementById('chatPanel').classList.contains('active')) {
+                addChatMessage(data.senderName, data.message, 'received', data.timestamp);
+            }
         }
     }
 });
 
 socket.on('removeUserMarker', (data) => {
-    if (friendMarkers[data.userId]) {
-        friendMarkers[data.userId].remove();
-        delete friendMarkers[data.userId];
-    }
+    if (friendMarkers[data.userId]) friendMarkers[data.userId].remove();
+    delete friendMarkers[data.userId];
+});
+
+socket.on('poiStatus', (data) => {
+    alert(data.message);
+    if (data.success) socket.emit('requestPOIs');
 });
 
 socket.on('updatePOIsList', (poisData) => {
@@ -552,62 +597,77 @@ socket.on('updatePOIsList', (poisData) => {
 });
 
 socket.on('historicalPathData', (data) => {
-    if (data.success && data.path?.length > 0) {
+    if (data.success && data.path?.length) {
         drawHistoricalPath(data.userId, data.path.map(loc => loc.location.coordinates));
         alert(`تم عرض المسار التاريخي لـ ${data.userId}.`);
         togglePanel(null);
     } else {
-        alert(data.message || 'لا توجد بيانات مسار تاريخي.');
+        alert(data.message || `لا يوجد مسار تاريخي.`);
     }
 });
 
 socket.on('chatHistoryData', (data) => {
-    const div = document.getElementById('chatMessages');
-    div.innerHTML = '';
-    if (data.success && data.history?.length > 0) {
-        data.history.forEach(msg => {
-            const type = (msg.senderId === currentUser.userId) ? 'sent' : 'received';
+    const chatMessagesDiv = document.getElementById('chatMessages');
+    if (data.success && data.history?.length) {
+        chatMessagesDiv.innerHTML = data.history.map(msg => {
+            const type = msg.senderId === currentUser.userId ? 'sent' : 'received';
             const name = type === 'sent' ? currentUser.name : linkedFriends.find(f => f.userId === msg.senderId)?.name || 'صديق';
-            addChatMessage(name, msg.message, type, msg.timestamp);
-        });
+            const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `<div class="message ${type}"><span class="message-meta">${name} - ${time}</span><br>${msg.message}</div>`;
+        }).join('');
     } else {
-        div.innerHTML = '<p style="text-align: center; color: #777;">لا توجد رسائل سابقة.</p>';
+        chatMessagesDiv.innerHTML = '<p>لا توجد رسائل سابقة.</p>';
     }
 });
 
-// ====== معالجات أحداث الواجهة ======
+// ====== ربط الأحداث عند تحميل الصفحة ======
 document.addEventListener('DOMContentLoaded', () => {
-    // Buttons in header
+    // أزرار التنقل الرئيسية
     document.getElementById('showGeneralMapBtn').onclick = () => { togglePanel(null); showGeneralMap(); };
-    document.getElementById('showFriendsMapBtn').onclick = () => { togglePanel(null); showFriendsMap(); };
-    document.getElementById('showProfileBtn').onclick = () => togglePanel('profilePanel');
-    document.getElementById('showConnectBtn').onclick = () => togglePanel('connectPanel');
+    document.getElementById('showFriendsMapBtn').onclick = () => { if(currentUser) { togglePanel(null); showFriendsMap(); } };
+    document.getElementById('showProfileBtn').onclick = () => { if(currentUser) togglePanel('profilePanel'); };
+    document.getElementById('showConnectBtn').onclick = () => { if(currentUser) togglePanel('connectPanel'); };
     document.getElementById('showMoazebBtn').onclick = () => togglePanel('moazebPanel');
-    document.getElementById('showFeaturesBtn').onclick = () => { togglePanel('featuresPanel'); updateFriendBatteryStatus(); fetchAndDisplayPrayerTimes(); };
-    document.getElementById('showSettingsBtn').onclick = () => togglePanel('settingsPanel');
-    
-    // Initial Info Panel
-    document.getElementById('initialInfoConfirmBtn').onclick = () => {
-        const data = {
-            name: document.getElementById('initialInfoNameInput').value.trim(),
-            gender: document.getElementById('initialInfoGenderSelect').value,
-            phone: document.getElementById('initialInfoPhoneInput').value.trim(),
-            email: document.getElementById('initialInfoEmailInput').value.trim()
-        };
-        if (Object.values(data).every(val => val && val !== 'other')) {
-            socket.emit('updateSettings', data);
-            document.getElementById('initialInfoPanel').classList.remove('active');
-        } else {
-            alert('الرجاء ملء جميع الحقول المطلوبة.');
+    document.getElementById('showFeaturesBtn').onclick = () => { if(currentUser) { togglePanel('featuresPanel'); fetchAndDisplayPrayerTimes(); updateFriendBatteryStatus(); }};
+    document.getElementById('showSettingsBtn').onclick = () => { if(currentUser) togglePanel('settingsPanel'); };
+
+    // زر SOS
+    document.getElementById('sosButton').onclick = () => {
+        if (!currentUser?.settings?.emergencyWhatsapp) return alert("الرجاء إضافة رقم واتساب للطوارئ في الإعدادات.");
+        if (confirm("هل أنت متأكد من إرسال إشارة استغاثة (SOS)؟")) {
+            playSOSSound();
+            const { coordinates } = currentUser.location;
+            const mapLink = coordinates ? `https://www.google.com/maps?q=${coordinates[1]},${coordinates[0]}` : "موقعي غير متاح";
+            const message = `مساعدة عاجلة! أنا ${currentUser.name} بحاجة للمساعدة.\nموقعي: ${mapLink}`;
+            window.open(`https://wa.me/${currentUser.settings.emergencyWhatsapp}?text=${encodeURIComponent(message)}`, '_blank');
         }
     };
-    
-    // Chat bar
-    document.getElementById('bottomChatSendBtn').onclick = sendMessageFromBottomBar;
-    document.getElementById('bottomChatInput').onkeypress = (e) => e.key === 'Enter' && sendMessageFromBottomBar();
-    document.getElementById('toggleChatHistoryBtn').onclick = () => { if(linkedFriends.length > 0) { togglePanel('chatPanel'); setupChatPanel(); } else { alert('لا يوجد أصدقاء للدردشة.')}};
-    
-    // Features Panel
+
+    // قسم المعزب
+    document.getElementById('addMoazebBtn').onclick = () => {
+        if (!currentUser?.location?.coordinates) return alert("يرجى تفعيل GPS أولاً.");
+        const data = {
+            name: document.getElementById('addMoazebName').value.trim(),
+            address: document.getElementById('addMoazebAddress').value.trim(),
+            phone: document.getElementById('addMoazebPhone').value.trim(),
+            governorate: document.getElementById('addMoazebGov').value.trim(),
+            district: document.getElementById('addMoazebDist').value.trim(),
+            location: currentUser.location.coordinates
+        };
+        if (Object.values(data).some(v => !v)) return alert('الرجاء ملء جميع الحقول.');
+        socket.emit('addMoazeb', data);
+    };
+    document.getElementById('searchMoazebBtn').onclick = () => {
+        const query = {
+            phone: document.getElementById('searchMoazebPhone').value.trim(),
+            governorate: document.getElementById('searchMoazebGov').value.trim(),
+            district: document.getElementById('searchMoazebDist').value.trim(),
+        };
+        if (Object.values(query).every(v => !v)) return alert('أدخل معيار بحث واحد على الأقل.');
+        socket.emit('searchMoazeb', query);
+    };
+
+    // قسم الميزات
     const poiCategorySelect = document.getElementById('poiCategorySelect');
     const categories = [
         { value: 'Rest Area', text: 'استراحة', icon: '<i class="fas fa-bed"></i>' },
@@ -622,97 +682,43 @@ document.addEventListener('DOMContentLoaded', () => {
     poiCategorySelect.innerHTML = categories.map(c => `<option value="${c.value}" data-icon='${c.icon}'>${c.text}</option>`).join('');
 
     document.getElementById('addPoiBtn').onclick = () => {
-        if (!currentUser?.location?.coordinates) return alert("يرجى تفعيل GPS وتحديد موقعك أولاً.");
+        if (!currentUser?.location?.coordinates) return alert("يرجى تفعيل GPS أولاً.");
         const poiName = prompt("أدخل اسم نقطة الاهتمام:");
         if (poiName) {
-            const selected = poiCategorySelect.options[poiCategorySelect.selectedIndex];
+            const selectedOption = poiCategorySelect.options[poiCategorySelect.selectedIndex];
             socket.emit('addCommunityPOI', {
                 name: poiName,
                 description: prompt("أدخل وصفاً (اختياري):"),
-                category: selected.value,
+                category: selectedOption.value,
                 location: currentUser.location.coordinates,
-                icon: selected.dataset.icon
+                icon: selectedOption.dataset.icon
             });
         }
     };
-
     document.getElementById('setMeetingPointBtn').onclick = () => {
         const name = document.getElementById('meetingPointInput').value.trim();
-        if (name && currentUser?.location?.coordinates) {
-            socket.emit('setMeetingPoint', { name, location: currentUser.location.coordinates });
-        } else {
-            alert("أدخل اسمًا لنقطة التجمع وحدد موقعك.");
-        }
+        if (!name) return alert("أدخل اسم لنقطة التجمع.");
+        if (!currentUser?.location?.coordinates) return alert("فعل GPS أولاً.");
+        socket.emit('setMeetingPoint', { name, location: currentUser.location.coordinates });
     };
     document.getElementById('endMeetingPointBtn').onclick = () => {
-        if (confirm('هل أنت متأكد من إنهاء نقطة التجمع؟')) socket.emit('clearMeetingPoint');
+        if (confirm('هل تريد إنهاء نقطة التجمع؟')) socket.emit('clearMeetingPoint');
     };
-    
-    // Moazeb Panel
-    document.getElementById('addMoazebBtn').onclick = () => {
-        const data = {
-            name: document.getElementById('addMoazebName').value.trim(),
-            address: document.getElementById('addMoazebAddress').value.trim(),
-            phone: document.getElementById('addMoazebPhone').value.trim(),
-            governorate: document.getElementById('addMoazebGov').value.trim(),
-            district: document.getElementById('addMoazebDist').value.trim(),
-            location: currentUser?.location?.coordinates
-        };
-        if (Object.values(data).every(val => val)) {
-            socket.emit('addMoazeb', data);
-        } else {
-            alert('يرجى ملء جميع حقول المضيف وتحديد موقعك.');
-        }
-    };
-    document.getElementById('searchMoazebBtn').onclick = () => {
-        const query = {
-            phone: document.getElementById('searchMoazebPhone').value.trim(),
-            governorate: document.getElementById('searchMoazebGov').value.trim(),
-            district: document.getElementById('searchMoazebDist').value.trim()
-        };
-        if (Object.values(query).some(val => val)) {
-            socket.emit('searchMoazeb', query);
-        } else {
-            alert('أدخل معيارًا واحدًا للبحث على الأقل.');
-        }
-    };
+    document.getElementById('refreshPrayerTimesBtn').onclick = fetchAndDisplayPrayerTimes;
 
-    // SOS Button
-    document.getElementById('sosButton').onclick = () => {
-        const emergencyNum = currentUser?.settings?.emergencyWhatsapp;
-        if (!emergencyNum) return alert("الرجاء إضافة رقم طوارئ في الإعدادات.");
-        if (confirm("هل أنت متأكد من إرسال إشارة استغاثة (SOS)؟")) {
-            playSOSSound();
-            const lat = currentUser.location.coordinates[1];
-            const lng = currentUser.location.coordinates[0];
-            const message = `مساعدة عاجلة! أنا بحاجة للمساعدة.\nموقعي الحالي: https://www.google.com/maps?q=${lat},${lng}\n\nمن تطبيق طريق الجنة - ${currentUser.name}`;
-            window.open(`https://wa.me/${emergencyNum}?text=${encodeURIComponent(message)}`, '_blank');
-        }
-    };
+    // الدردشة
+    document.getElementById('bottomChatSendBtn').onclick = sendMessageFromBottomBar;
+    document.getElementById('bottomChatInput').onkeypress = (e) => { if (e.key === 'Enter') sendMessageFromBottomBar(); };
+    document.getElementById('toggleChatHistoryBtn').onclick = () => { if (currentUser) togglePanel('chatPanel'); setupChatPanel(); };
 
-    // Settings Panel Toggles
+    // الإعدادات
     ['shareLocationToggle', 'soundToggle', 'hideBubblesToggle', 'stealthModeToggle'].forEach(id => {
-        document.getElementById(id).onchange = (e) => {
-            socket.emit('updateSettings', { [e.target.id.replace('Toggle', '')]: e.target.checked });
-        };
+        document.getElementById(id).onchange = (e) => socket.emit('updateSettings', { [e.target.id.replace('Toggle', '')]: e.target.checked });
     });
     document.getElementById('updateEmergencyWhatsappBtn').onclick = () => {
-        const num = document.getElementById('emergencyWhatsappInput').value.trim();
-        if (num) socket.emit('updateSettings', { emergencyWhatsapp: num });
+        const number = document.getElementById('emergencyWhatsappInput').value.trim();
+        if(number) socket.emit('updateSettings', { emergencyWhatsapp: number });
     };
-
-    // Connect Panel
-    document.getElementById('connectFriendBtn').onclick = () => {
-        const code = document.getElementById('friendCodeInput').value.trim();
-        if(code) socket.emit('requestLink', { friendCode: code });
-    };
-
-    // Map Controls
-    document.getElementById('mapPitch').oninput = (e) => map.setPitch(e.target.value);
-    document.getElementById('mapBearing').oninput = (e) => map.setBearing(e.target.value);
 });
 
-map.on('load', () => {
-    showGeneralMap();
-    document.getElementById('showGeneralMapBtn').classList.add('active');
-});
+map.on('load', showGeneralMap);
