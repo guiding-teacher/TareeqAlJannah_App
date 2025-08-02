@@ -63,7 +63,6 @@ const holySites = [
 ];
 
 // تأكد من تحديث هذا الرابط إلى رابط خدمة Render الخاصة بك
-// const socket = io('https://YOUR-RENDER-APP-NAME.onrender.com');
 const socket = io('https://tareeqaljannah-app.onrender.com'); // مثال: استبدل هذا بعنوان URL الصحيح من Render
 
 // ====== وظائف عامة للواجهة الرسومية (UI Helpers) ======
@@ -732,10 +731,13 @@ socket.on('connect', () => {
     }
     const userName = localStorage.getItem('appUserName') || null;
     const userPhoto = localStorage.getItem('appUserPhoto') || null;
+    const gender = localStorage.getItem('appUserGender') || null; // جديد
+    const phone = localStorage.getItem('appUserPhone') || null;   // جديد
+    const email = localStorage.getItem('appUserEmail') || null;   // جديد
     const emergencyWhatsapp = localStorage.getItem('appEmergencyWhatsapp') || null;
 
-    // إرسال emergencyWhatsapp أيضاً عند التسجيل
-    socket.emit('registerUser', { userId, name: userName, photo: userPhoto, emergencyWhatsapp: emergencyWhatsapp });
+    // إرسال جميع البيانات عند التسجيل/التحديث
+    socket.emit('registerUser', { userId, name: userName, photo: userPhoto, gender: gender, phone: phone, email: email, emergencyWhatsapp: emergencyWhatsapp });
     console.log('تم إرسال طلب تسجيل المستخدم إلى الخادم:', userId);
 });
 
@@ -745,7 +747,11 @@ socket.on('currentUserData', (user) => {
     localStorage.setItem('appUserId', currentUser.userId);
     localStorage.setItem('appUserName', currentUser.name);
     localStorage.setItem('appUserPhoto', currentUser.photo);
-    localStorage.setItem('appEmergencyWhatsapp', currentUser.settings.emergencyWhatsapp || ''); // حفظ رقم الواتساب
+    localStorage.setItem('appUserGender', currentUser.gender || ''); // جديد
+    localStorage.setItem('appUserPhone', currentUser.phone || '');   // جديد
+    localStorage.setItem('appUserEmail', currentUser.email || '');   // جديد
+    localStorage.setItem('appEmergencyWhatsapp', currentUser.settings.emergencyWhatsapp || '');
+
 
     // تحديث الواجهة ببيانات المستخدم الأولية (هذه العناصر ستكون موجودة الآن بفضل DOMContentLoaded)
     document.getElementById('userName').textContent = currentUser.name;
@@ -753,6 +759,12 @@ socket.on('currentUserData', (user) => {
     document.getElementById('userLinkCode').textContent = currentUser.linkCode;
     document.getElementById('editUserNameInput').value = currentUser.name;
     document.getElementById('emergencyWhatsappInput').value = currentUser.settings.emergencyWhatsapp || '';
+
+    // تحديث حقول المعلومات الأولية
+    if (document.getElementById('initialInfoNameInput')) document.getElementById('initialInfoNameInput').value = currentUser.name;
+    if (document.getElementById('initialInfoGenderSelect')) document.getElementById('initialInfoGenderSelect').value = currentUser.gender;
+    if (document.getElementById('initialInfoPhoneInput')) document.getElementById('initialInfoPhoneInput').value = currentUser.phone;
+    if (document.getElementById('initialInfoEmailInput')) document.getElementById('initialInfoEmailInput').value = currentUser.email;
 
 
     document.getElementById('shareLocationToggle').checked = currentUser.settings.shareLocation;
@@ -764,6 +776,14 @@ socket.on('currentUserData', (user) => {
 
     if (currentUser.linkedFriends && currentUser.linkedFriends.length > 0) {
         socket.emit('requestFriendsData', { friendIds: currentUser.linkedFriends });
+    }
+
+    // جديد: إخفاء لوحة المعلومات الأولية إذا كانت البيانات مكتملة
+    if (currentUser.name && currentUser.gender !== 'other' && currentUser.phone && currentUser.email) {
+        document.getElementById('initialInfoPanel').classList.remove('active');
+    } else {
+        // إظهارها إذا كانت البيانات غير مكتملة
+        document.getElementById('initialInfoPanel').classList.add('active');
     }
 });
 
@@ -882,14 +902,17 @@ socket.on('updateFriendsList', (friendsData) => {
 });
 
 socket.on('newChatMessage', (data) => {
-    if (currentUser && data.receiverId === currentUser.userId) {
-        addChatMessage(data.senderName, data.message, 'received');
-        if (currentUser.settings.sound) {
-            playNotificationSound();
-        }
-        if (!currentUser.settings.hideBubbles) {
-            showMessageBubble(data.senderId, data.message);
-        }
+    // تحديث لوحة الدردشة فقط إذا كانت هذه الرسالة تخص المحادثة الحالية
+    if (currentUser && data.receiverId === currentUser.userId && data.senderId === currentChatFriendId) {
+        addChatMessage(data.senderName, data.message, 'received', data.timestamp);
+    }
+    // عرض فقاعة الرسالة دائماً (إذا لم يكن المستخدم قد قام بإخفائها)
+    if (!currentUser.settings.hideBubbles) {
+        showMessageBubble(data.senderId, data.message);
+    }
+    // تشغيل الصوت إذا كانت الأصوات مفعلة
+    if (currentUser.settings.sound) {
+        playNotificationSound();
     }
 });
 
@@ -908,7 +931,7 @@ socket.on('removeUserMarker', (data) => {
 socket.on('poiStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        socket.emit('requestPOIs');
+        socket.emit('requestPOIs'); // إذا نجحت الإضافة، اطلب تحديث قائمة النقاط
     }
 });
 
@@ -939,6 +962,26 @@ socket.on('historicalPathData', (data) => {
     }
 });
 
+// حدث لاستقبال سجل الدردشة
+socket.on('chatHistoryData', (data) => {
+    const chatMessagesDiv = document.getElementById('chatMessages');
+    if (!chatMessagesDiv) return; // تأكد أن العنصر موجود
+
+    chatMessagesDiv.innerHTML = ''; // مسح الرسائل القديمة
+
+    if (data.success && data.history && data.history.length > 0) {
+        data.history.forEach(msg => {
+            const messageType = (msg.senderId === currentUser.userId) ? 'sent' : 'received';
+            // جلب اسم المرسل (يمكن أن نمرر الاسم من الخادم لتجنب البحث هنا)
+            const senderName = (msg.senderId === currentUser.userId) ? currentUser.name :
+                               linkedFriends.find(f => f.userId === msg.senderId)?.name || 'صديق';
+            addChatMessage(senderName, msg.message, messageType, msg.timestamp);
+        });
+    } else {
+        chatMessagesDiv.innerHTML = '<p style="text-align: center; color: #777;">لا توجد رسائل سابقة في هذه المحادثة.</p>';
+    }
+});
+
 
 map.on('load', () => {
     showGeneralMap();
@@ -948,7 +991,60 @@ map.on('load', () => {
 // ====== هذا الجزء يضمن أن عناصر DOM الديناميكية يتم إنشاؤها وربط الأحداث بها بعد تحميل الصفحة ======
 document.addEventListener('DOMContentLoaded', () => {
 
-    // 1. إضافة حقول تغيير الاسم في لوحة الملف الشخصي
+    // 0. إضافة لوحة المعلومات الأولية (Initial Info Panel)
+    const initialInfoPanel = document.createElement('div');
+    initialInfoPanel.id = 'initialInfoPanel';
+    initialInfoPanel.className = 'overlay-panel';
+    initialInfoPanel.innerHTML = `
+        <h2><i class="fas fa-info-circle"></i> معلوماتك الشخصية</h2>
+        <p>الرجاء إدخال معلوماتك لإنشاء ملفك الشخصي.</p>
+        <input type="text" id="initialInfoNameInput" placeholder="اسمك">
+        <select id="initialInfoGenderSelect">
+            <option value="other">الجنس</option>
+            <option value="male">ذكر</option>
+            <option value="female">أنثى</option>
+        </select>
+        <input type="tel" id="initialInfoPhoneInput" placeholder="رقم هاتفك">
+        <input type="email" id="initialInfoEmailInput" placeholder="بريدك الإلكتروني">
+        <button id="initialInfoConfirmBtn"><i class="fas fa-check-circle"></i> تأكيد</button>
+    `;
+    document.body.appendChild(initialInfoPanel);
+
+    // ربط معالج زر التأكيد في لوحة المعلومات الأولية
+    document.getElementById('initialInfoConfirmBtn').addEventListener('click', () => {
+        const name = document.getElementById('initialInfoNameInput').value.trim();
+        const gender = document.getElementById('initialInfoGenderSelect').value;
+        const phone = document.getElementById('initialInfoPhoneInput').value.trim();
+        const email = document.getElementById('initialInfoEmailInput').value.trim();
+
+        if (name && gender !== 'other' && phone && email) {
+            localStorage.setItem('appUserName', name);
+            localStorage.setItem('appUserGender', gender);
+            localStorage.setItem('appUserPhone', phone);
+            localStorage.setItem('appUserEmail', email);
+
+            // إعادة إرسال بيانات المستخدم المكتملة إلى الخادم
+            if (currentUser && currentUser.userId) {
+                socket.emit('registerUser', {
+                    userId: currentUser.userId,
+                    name: name,
+                    photo: currentUser.photo,
+                    gender: gender,
+                    phone: phone,
+                    email: email,
+                    emergencyWhatsapp: currentUser.settings.emergencyWhatsapp
+                });
+            }
+
+            initialInfoPanel.classList.remove('active'); // إخفاء اللوحة
+            alert('تم حفظ معلوماتك بنجاح!');
+            // لا نحتاج لاستدعاء showGeneralMap هنا، لأن currentUserData ستعيد تحميل التطبيق
+        } else {
+            alert('الرجاء ملء جميع الحقول المطلوبة (الاسم، الجنس، الهاتف، البريد الإلكتروني).');
+        }
+    });
+
+    // 1. إضافة حقول تغيير الاسم (ومعه زر نسخ رمز الربط) في لوحة الملف الشخصي
     const profileInfoDiv = document.getElementById('profilePanel').querySelector('.profile-info');
     if (profileInfoDiv) {
         const userNameInput = document.createElement('input');
@@ -962,6 +1058,12 @@ document.addEventListener('DOMContentLoaded', () => {
         updateNameBtn.id = 'updateUserNameBtn';
         profileInfoDiv.appendChild(updateNameBtn);
 
+        // جديد: زر نسخ رمز الربط
+        const copyLinkCodeBtn = document.createElement('button');
+        copyLinkCodeBtn.innerHTML = '<i class="fas fa-copy"></i> نسخ رمز الربط';
+        copyLinkCodeBtn.id = 'copyLinkCodeBtn';
+        profileInfoDiv.appendChild(copyLinkCodeBtn);
+
         // ربط معالج الحدث لزر حفظ الاسم
         updateNameBtn.addEventListener('click', () => {
             if (!currentUser) return;
@@ -972,7 +1074,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 socket.emit('registerUser', {
                     userId: currentUser.userId,
                     name: newName,
-                    photo: currentUser.photo
+                    photo: currentUser.photo,
+                    gender: currentUser.gender, // تأكد من إرسال جميع البيانات
+                    phone: currentUser.phone,
+                    email: currentUser.email,
+                    emergencyWhatsapp: currentUser.settings.emergencyWhatsapp
                 });
                 document.getElementById('userName').textContent = newName;
                 alert('تم تحديث الاسم بنجاح!');
@@ -980,28 +1086,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('الرجاء إدخال اسم جديد وصالح.');
             }
         });
+
+        // ربط معالج الحدث لزر نسخ رمز الربط
+        copyLinkCodeBtn.addEventListener('click', () => {
+            const linkCode = document.getElementById('userLinkCode').textContent;
+            if (linkCode) {
+                navigator.clipboard.writeText(linkCode).then(() => {
+                    alert('تم نسخ رمز الربط إلى الحافظة!');
+                }).catch(err => {
+                    console.error('فشل نسخ رمز الربط:', err);
+                    alert('فشل نسخ رمز الربط. الرجاء المحاولة يدوياً.');
+                });
+            }
+        });
     }
 
 
-    // 2. إضافة زر "إضافة استراحة" في لوحة الميزات
+    // 2. إضافة زر "إضافة استراحة" (مع حقل اختيار أيقونة) في لوحة الميزات
     const featuresPanel = document.getElementById('featuresPanel');
     if (featuresPanel) {
-        // البحث عن قسم نقاط الاهتمام (POI) بشكل أدق
         const poiSectionTitle = featuresPanel.querySelector('.feature-section h3:has(.fa-map-marker-alt)');
         if (poiSectionTitle) {
             const poiContainer = poiSectionTitle.closest('.feature-section');
             if (poiContainer) {
+                // زر إضافة استراحة
                 const addRestAreaBtn = document.createElement('button');
                 addRestAreaBtn.innerHTML = '<i class="fas fa-bed"></i> إضافة استراحة';
                 addRestAreaBtn.id = 'addRestAreaBtn';
                 poiContainer.appendChild(addRestAreaBtn);
 
-                // جديد: حقل لاختيار أيقونة نقطة الاهتمام
+                // حقل اختيار أيقونة نقطة الاهتمام
                 const iconSelectLabel = document.createElement('label');
                 iconSelectLabel.textContent = "اختر أيقونة:";
                 const iconSelect = document.createElement('select');
                 iconSelect.id = 'poiIconSelect';
-                // إضافة خيارات الأيقونات
                 const icons = [
                     { value: '<i class="fas fa-bed"></i>', text: 'استراحة' },
                     { value: '<i class="fas fa-medkit"></i>', text: 'طبي' },
@@ -1014,29 +1132,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 icons.forEach(icon => {
                     const option = document.createElement('option');
                     option.value = icon.value;
-                    option.innerHTML = icon.text + ' ' + icon.value; // عرض النص والأيقونة
+                    option.innerHTML = icon.text + ' ' + icon.value;
                     iconSelect.appendChild(option);
                 });
                 poiContainer.appendChild(iconSelectLabel);
                 poiContainer.appendChild(iconSelect);
 
-
                 addRestAreaBtn.addEventListener('click', () => {
-                    if (!currentUser || !currentUser.location || !currentUser.location.coordinates) {
-                        alert("يرجى تفعيل GPS لتحديد موقع الاستراحة.");
+                    if (!currentUser || !currentUser.location || !currentUser.location.coordinates || (currentUser.location.coordinates[0] === 0 && currentUser.location.coordinates[1] === 0)) {
+                        alert("يرجى تفعيل GPS وتحديد موقعك أولاً لتحديد موقع الاستراحة.");
                         return;
                     }
                     const restAreaName = prompt("أدخل اسم الاستراحة:");
                     if (restAreaName) {
                         const restAreaDesc = prompt("أدخل وصفاً للاستراحة (اختياري):");
                         const restAreaCategory = prompt("أدخل فئة الاستراحة (Rest Area, Medical Post, Food Station, Other):", "Rest Area");
-                        const selectedIcon = document.getElementById('poiIconSelect').value; // جلب الأيقونة المختارة
+                        const selectedIcon = document.getElementById('poiIconSelect').value;
                         socket.emit('addCommunityPOI', {
                             name: restAreaName,
                             description: restAreaDesc,
                             category: restAreaCategory,
                             location: currentUser.location.coordinates,
-                            icon: selectedIcon // إرسال الأيقونة
+                            icon: selectedIcon
                         });
                     }
                 });
@@ -1067,7 +1184,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
                 // تعبئة قائمة المستخدمين عند فتح لوحة الميزات
-                // هذا الجزء يعالج بشكل صحيح تعبئة القائمة بناءً على المستخدم الحالي والأصدقاء المرتبطين
                 document.getElementById('showFeaturesBtn').addEventListener('click', () => {
                     if (!currentUser) return;
                     selectUserDropdown.innerHTML = ''; // تأكد أن القائمة فارغة قبل التعبئة
@@ -1106,21 +1222,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 4. إضافة عنصر اختيار الصديق في لوحة الدردشة (هذا يتم إنشاؤه في الجزء 1 من script.js)
-    // الآن، فقط تأكد من ربط معالج الأحداث لزر الدردشة بعد DOMContentLoaded
-    document.getElementById('showChatBtn').addEventListener('click', () => {
-        if (!currentUser) {
-            alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
-            return;
+    // 4. إضافة عنصر اختيار الصديق في لوحة الدردشة (التي سيتم تعديلها في index.html)
+    const chatPanel = document.getElementById('chatPanel');
+    if (chatPanel) {
+        const chatMessagesDiv = document.getElementById('chatMessages'); // الرسائل
+        
+        // إنشاء عنصر الـ select الجديد
+        const chatFriendSelectContainer = document.createElement('div');
+        chatFriendSelectContainer.className = 'chat-header';
+        chatFriendSelectContainer.style = "margin-bottom: 10px;";
+        chatFriendSelectContainer.innerHTML = `
+            <label for="chatFriendSelect" style="display: block; margin-bottom: 5px; color: #555;">الدردشة مع:</label>
+            <select id="chatFriendSelect" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;"></select>
+        `;
+        
+        // إضافة الـ select قبل منطقة الرسائل
+        // يجب أن يتم إدراجها قبل chatMessagesDiv
+        if(chatMessagesDiv && chatMessagesDiv.parentNode) {
+            chatMessagesDiv.parentNode.insertBefore(chatFriendSelectContainer, chatMessagesDiv);
         }
-        if (linkedFriends.length === 0) {
-            alert("الرجاء ربط صديق أولاً لبدء الدردشة.");
-            return;
-        }
-        togglePanel('chatPanel');
-        showFriendsMap();
-        setupChatPanel(); // استدعاء دالة إعداد لوحة الدردشة الجديدة
-    });
+
+        // ربط معالج حدث لزر الدردشة لتهيئة اللوحة
+        document.getElementById('showChatBtn').addEventListener('click', () => {
+            if (!currentUser) {
+                alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
+                return;
+            }
+            if (linkedFriends.length === 0) {
+                alert("الرجاء ربط صديق أولاً لبدء الدردشة.");
+                return;
+            }
+            togglePanel('chatPanel');
+            showFriendsMap();
+            setupChatPanel(); // استدعاء دالة إعداد لوحة الدردشة الجديدة
+        });
+    }
 
 
     // 5. ربط معالجات الأحداث للأزرار الرئيسية (بعد التأكد من وجودها في DOM)
@@ -1188,6 +1324,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             });
+
         } else {
             friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
         }
@@ -1270,7 +1407,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const meetingPointInput = document.getElementById('meetingPointInput');
         const meetingPointName = meetingPointInput ? meetingPointInput.value.trim() : '';
 
-        if (!currentUser || !currentUser.location || !currentUser.location.coordinates) {
+        if (!currentUser || !currentUser.location || !currentUser.location.coordinates || (currentUser.location.coordinates[0] === 0 && currentUser.location.coordinates[1] === 0)) {
             alert("لا يمكن تحديد نقطة تجمع بدون تحديد موقعك الحالي أولاً.");
             return;
         }
