@@ -6,7 +6,7 @@ mapboxgl.setRTLTextPlugin(
     true
 );
 
-// ====== إعدادات Mapbox ======
+// إعدادات Mapbox
 mapboxgl.accessToken = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
 
 const map = new mapboxgl.Map({
@@ -14,11 +14,11 @@ const map = new mapboxgl.Map({
     style: 'mapbox://styles/mapbox/streets-v11',
     center: [43.6875, 33.3152],
     zoom: 6,
-    pitch: 45, // ميل افتراضي 3D
-    bearing: -17.6 // دوران افتراضي 3D
+    pitch: 45,
+    bearing: -17.6
 });
 
-// ====== متغيرات عامة ======
+// متغيرات عامة
 let currentUser = null;
 let linkedFriends = [];
 const friendMarkers = {};
@@ -29,15 +29,13 @@ let currentHistoricalPathLayer = null;
 let currentChatFriendId = null;
 let activeMessageTimers = {};
 
-// المواقع الرئيسية في العراق (فارغة بناءً على طلبك)
+// المواقع الرئيسية في العراق
 const holySites = [];
 
 // اتصال Socket.IO
 const socket = io('https://tareeqaljannah-app.onrender.com');
 
-
-// ====== وظائف عامة للواجهة الرسومية (UI Helpers) ======
-
+// وظائف عامة للواجهة الرسومية
 function togglePanel(panelId) {
     document.querySelectorAll('.overlay-panel').forEach(panel => {
         panel.classList.remove('active');
@@ -59,7 +57,6 @@ function togglePanel(panelId) {
     }
 }
 
-// هذه الوظيفة تربط معالجات أحداث الإغلاق
 document.querySelectorAll('.close-btn').forEach(button => {
     button.addEventListener('click', (e) => {
         e.target.closest('.overlay-panel').classList.remove('active');
@@ -71,10 +68,8 @@ document.querySelectorAll('.close-btn').forEach(button => {
     });
 });
 
-// ====== وظائف الخريطة والمواقع (Map & Location Functions) ======
-
+// وظائف الخريطة والمواقع
 function createCustomMarker(user) {
-    // تحقق من وجود بيانات الموقع قبل المتابعة (تجنب [0,0] الافتراضية)
     if (!user || !user.location || !user.location.coordinates || (user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
         return null;
     }
@@ -91,7 +86,6 @@ function createCustomMarker(user) {
     } else {
         el.classList.add('friend-marker');
     }
-
 
     if (currentUser && user.userId === currentUser.userId && currentUser.settings.stealthMode) {
         el.classList.add('stealth-mode');
@@ -142,8 +136,8 @@ function showFriendDetailsPopup(friend) {
 
     const friendDetailsHtml = `
         ${friend.gender && friend.gender !== 'other' ? `<p><i class="fas fa-venus-mars"></i> الجنس: ${friend.gender === 'male' ? 'ذكر' : 'أنثى'}</p>` : ''}
-        ${friend.phone ? `<p><i class="fas fa-phone"></i> الهاتف: ${friend.phone}</p>` : ''}
-        ${friend.email ? `<p><i class="fas fa-envelope"></i> البريد: ${friend.email}</p>` : ''}
+        ${friend.phone && friend.settings.showPhone ? `<p><i class="fas fa-phone"></i> الهاتف: ${friend.phone}</p>` : ''}
+        ${friend.email && friend.settings.showEmail ? `<p><i class="fas fa-envelope"></i> البريد: ${friend.email}</p>` : ''}
     `;
 
     const popupContent = `
@@ -338,7 +332,6 @@ function showFriendsMap() {
     }
 }
 
-
 function drawGeneralPaths() {
     const pathCoordinates = [].filter(Boolean);
     if (pathCoordinates.length < 2) {
@@ -401,7 +394,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return distance;
 }
 
-// ====== نظام تحديد المواقع (GPS) ======
+// نظام تحديد المواقع (GPS)
 function startLocationTracking() {
     if (!navigator.geolocation) {
         alert("متصفحك لا يدعم تحديد المواقع.");
@@ -621,9 +614,7 @@ function updateMyCreationsList() {
     }
 }
 
-
-// ====== التعامل مع أحداث WebSocket من الخادم ======
-
+// التعامل مع أحداث WebSocket من الخادم
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId');
     if (!userId) {
@@ -666,6 +657,8 @@ socket.on('currentUserData', (user) => {
     document.getElementById('soundToggle').checked = currentUser.settings.sound;
     document.getElementById('hideBubblesToggle').checked = currentUser.settings.hideBubbles;
     document.getElementById('stealthModeToggle').checked = currentUser.settings.stealthMode;
+    document.getElementById('showPhoneToggle').checked = currentUser.settings.showPhone;
+    document.getElementById('showEmailToggle').checked = currentUser.settings.showEmail;
 
     updateMyCreationsList();
     startLocationTracking();
@@ -782,7 +775,6 @@ socket.on('poiStatus', (data) => {
     alert(data.message);
     if (data.success) {
         socket.emit('requestPOIs');
-        // Refresh user data to get the new POI in their list
         socket.emit('registerUser', { userId: currentUser.userId });
     }
 });
@@ -827,10 +819,9 @@ socket.on('chatHistoryData', (data) => {
 
 socket.on('newMeetingPoint', (data) => {
     createMeetingPointMarker(data);
-    alert(`قام ${data.creatorName} بإنشاء نقطة تجمع جديدة: ${data.point.name}`);
     if (currentUser && data.creatorId === currentUser.userId) {
         document.getElementById('endMeetingPointBtn').style.display = 'block';
-        socket.emit('registerUser', { userId: currentUser.userId }); // Refresh user data
+        updateMyCreationsList();
     }
 });
 
@@ -843,7 +834,7 @@ socket.on('meetingPointCleared', (data) => {
     if (currentUser && data.creatorId === currentUser.userId) {
         document.getElementById('endMeetingPointBtn').style.display = 'none';
         document.getElementById('meetingPointInput').value = '';
-        socket.emit('registerUser', { userId: currentUser.userId }); // Refresh user data
+        updateMyCreationsList();
     }
 });
 
@@ -899,7 +890,6 @@ socket.on('prayerTimesData', (data) => {
         displayElement.innerHTML = `<p style="color: var(--danger-color);">${data.message || 'فشل جلب أوقات الصلاة.'}</p>`;
     }
 });
-
 
 map.on('load', () => {
     showGeneralMap();
@@ -998,7 +988,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('الرجاء ملء جميع حقول معلومات الملف الشخصي المطلوبة.');
         }
     });
-
 
     document.getElementById('showConnectBtn').addEventListener('click', () => {
         if (!currentUser) {
@@ -1193,6 +1182,10 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('الرجاء ملء جميع حقول المضيف.');
             return;
         }
+        if (!/^07\d{9}$/.test(data.phone)) {
+            alert('رقم الهاتف يجب أن يبدأ بـ 07 ويتكون من 11 رقماً');
+            return;
+        }
         socket.emit('addMoazeb', data);
     });
 
@@ -1208,7 +1201,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         socket.emit('searchMoazeb', query);
     });
-
 
     document.getElementById('showSettingsBtn').addEventListener('click', () => {
         if (!currentUser) {
@@ -1231,6 +1223,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.getElementById('emergencyWhatsappInput')) {
             document.getElementById('emergencyWhatsappInput').value = currentUser.settings.emergencyWhatsapp || '';
         }
+        if (document.getElementById('showPhoneToggle')) {
+            document.getElementById('showPhoneToggle').checked = currentUser.settings.showPhone;
+        }
+        if (document.getElementById('showEmailToggle')) {
+            document.getElementById('showEmailToggle').checked = currentUser.settings.showEmail;
+        }
     });
 
     document.getElementById('shareLocationToggle').addEventListener('change', (e) => {
@@ -1247,6 +1245,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('stealthModeToggle').addEventListener('change', (e) => {
         if (currentUser) socket.emit('updateSettings', { stealthMode: e.target.checked });
+    });
+
+    document.getElementById('showPhoneToggle').addEventListener('change', (e) => {
+        if (currentUser) socket.emit('updateSettings', { showPhone: e.target.checked });
+    });
+
+    document.getElementById('showEmailToggle').addEventListener('change', (e) => {
+        if (currentUser) socket.emit('updateSettings', { showEmail: e.target.checked });
     });
 
     document.getElementById('updateEmergencyWhatsappBtn').addEventListener('click', () => {
