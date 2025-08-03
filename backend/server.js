@@ -129,6 +129,7 @@ const MoazebSchema = new mongoose.Schema({
     phone: { type: String, required: true, index: true },
     governorate: { type: String, required: true, index: true },
     district: { type: String, required: true, index: true },
+    type: { type: String, enum: ['house', 'mawkib', 'hussainiya', 'tent', 'station', 'sleep', 'food'], default: 'house' },
     location: {
         type: { type: String, enum: ['Point'], default: 'Point' },
         coordinates: { type: [Number], required: true }
@@ -464,6 +465,39 @@ io.on('connection', async (socket) => {
         }
     });
 
+    socket.on('deletePOI', async (data) => {
+        const { poiId } = data;
+        if (!user || !poiId) return;
+
+        try {
+            const poi = await CommunityPOI.findById(poiId);
+            if (!poi) {
+                socket.emit('poiDeleted', { success: false, message: 'نقطة الاهتمام غير موجودة.' });
+                return;
+            }
+
+            if (poi.createdBy !== user.userId) {
+                socket.emit('poiDeleted', { success: false, message: 'غير مسموح لك بحذف هذه النقطة.' });
+                return;
+            }
+
+            await CommunityPOI.findByIdAndDelete(poiId);
+            await User.findByIdAndUpdate(
+                user._id,
+                { $pull: { createdPOIs: poiId } },
+                { new: true }
+            );
+
+            socket.emit('poiDeleted', { success: true, message: 'تم الحذف بنجاح.', poiId });
+            io.emit('updatePOIs');
+            socket.emit('registerUser', { userId: user.userId });
+
+        } catch (error) {
+            console.error('❌ خطأ في حذف POI:', error);
+            socket.emit('poiDeleted', { success: false, message: 'خطأ في الخادم.' });
+        }
+    });
+
     socket.on('requestPOIs', async () => {
         try {
             const pois = await CommunityPOI.find({ isApproved: true });
@@ -563,6 +597,43 @@ io.on('connection', async (socket) => {
 
         } catch (error) {
             console.error('❌ خطأ في البحث عن مضيف:', error);
+        }
+    });
+
+    socket.on('getAllMoazeb', async () => {
+        try {
+            const moazebs = await Moazeb.find().limit(100);
+            socket.emit('allMoazebData', { success: true, moazebs });
+        } catch (error) {
+            console.error('❌ خطأ في جلب جميع المضيفين:', error);
+            socket.emit('allMoazebData', { success: false, message: 'خطأ في الخادم' });
+        }
+    });
+
+    socket.on('linkToMoazeb', async (data) => {
+        const { moazebId } = data;
+        if (!user || !moazebId) {
+            socket.emit('linkToMoazebStatus', { success: false, message: 'بيانات ناقصة.' });
+            return;
+        }
+
+        try {
+            const moazeb = await Moazeb.findById(moazebId);
+            if (!moazeb) {
+                socket.emit('linkToMoazebStatus', { success: false, message: 'المضيف غير موجود.' });
+                return;
+            }
+
+            // يمكنك هنا إضافة أي منطق إضافي للربط مع المضيف
+            // مثلاً: إرسال إشعار للمضيف أو حفظ معلومات الربط
+            
+            socket.emit('linkToMoazebStatus', { 
+                success: true, 
+                message: `تم الربط مع المضيف ${moazeb.name} بنجاح. رقم الهاتف: ${moazeb.phone}` 
+            });
+        } catch (error) {
+            console.error('❌ خطأ في الربط مع المضيف:', error);
+            socket.emit('linkToMoazebStatus', { success: false, message: 'حدث خطأ في الخادم.' });
         }
     });
 
