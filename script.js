@@ -250,19 +250,35 @@ function createMoazebMarker(moazeb) {
     const el = document.createElement('div');
     el.className = 'moazeb-marker';
     
-    // تحديد أيقونة حسب نوع المكان
-    let icon;
+    // تحديد أيقونة حسب نوع المكان مع لون أخضر
+    let iconClass;
     switch(moazeb.type) {
-        case 'mawkib': icon = '<i class="fas fa-flag"></i>'; break;
-        case 'hussainiya': icon = '<i class="fas fa-place-of-worship"></i>'; break;
-        case 'tent': icon = '<i class="fas fa-campground"></i>'; break;
-        case 'station': icon = '<i class="fas fa-gas-pump"></i>'; break;
-        case 'sleep': icon = '<i class="fas fa-bed"></i>'; break;
-        case 'food': icon = '<i class="fas fa-utensils"></i>'; break;
-        default: icon = '<i class="fas fa-home"></i>';
+        case 'mawkib': iconClass = 'fas fa-flag'; break;
+        case 'hussainiya': iconClass = 'fas fa-place-of-worship'; break;
+        case 'tent': iconClass = 'fas fa-campground'; break;
+        case 'station': iconClass = 'fas fa-gas-pump'; break;
+        case 'sleep': iconClass = 'fas fa-bed'; break;
+        case 'food': iconClass = 'fas fa-utensils'; break;
+        default: iconClass = 'fas fa-home';
     }
     
-    el.innerHTML = icon;
+    // إنشاء العنصر بنفس نمط POI ولكن بلون أخضر
+    el.innerHTML = `
+        <div class="moazeb-icon-container">
+            <i class="${iconClass}"></i>
+        </div>
+    `;
+
+    // إضافة ستايل مباشر للون الأخضر
+    el.style.backgroundColor = '#006400'; // أخضر داكن
+    el.style.color = 'white';
+    el.style.borderRadius = '50%';
+    el.style.width = '30px';
+    el.style.height = '30px';
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
 
     const marker = new mapboxgl.Marker(el)
         .setLngLat(moazeb.location.coordinates)
