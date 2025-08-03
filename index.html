@@ -21,6 +21,7 @@
             <button id="showMoazebBtn" title="المضيفين"><i class="fas fa-home"></i> المعزب</button>
             <button id="showFeaturesBtn" title="ميزات إضافية"><i class="fas fa-bars"></i></button>
             <button id="showSettingsBtn" title="الإعدادات والخصوصية"><i class="fas fa-cog"></i></button>
+            <button id="showAllMoazebBtn" title="عرض جميع المضيفين"><i class="fas fa-map-marked-alt"></i> عرض المعزب</button>
         </nav>
         <button id="sosButton" class="sos-btn" title="زر الطوارئ"><i class="fas fa-exclamation-triangle"></i> SOS</button>
     </header>
@@ -45,7 +46,7 @@
             <option value="female">أنثى</option>
         </select>
         <input type="tel" id="initialInfoPhoneInput" placeholder="رقم هاتفك">
-        <input type="email" id="initialInfoEmailInput" placeholder="بريدك الإلكتروني">
+        <input type="email" id="initialInfoEmailInput" placeholder="بريدك الإلكتروني" required>
         <button id="initialInfoConfirmBtn"><i class="fas fa-check-circle"></i> تأكيد</button>
     </div>
 
@@ -66,7 +67,7 @@
                     <option value="female">أنثى</option>
                 </select>
                 <input type="tel" id="editPhoneInput" placeholder="رقم هاتفك">
-                <input type="email" id="editEmailInput" placeholder="بريدك الإلكتروني">
+                <input type="email" id="editEmailInput" placeholder="بريدك الإلكتروني" required>
                 <button id="updateProfileInfoBtn"><i class="fas fa-save"></i> حفظ التغييرات</button>
             </div>
         </div>
@@ -126,6 +127,10 @@
             <label for="poiCategorySelect">اختر الفئة:</label>
             <select id="poiCategorySelect"></select>
             <button id="addPoiBtn"><i class="fas fa-plus"></i> إضافة نقطة اهتمام في موقعي</button>
+            <div id="myPOIsList" style="margin-top: 10px; max-height: 150px; overflow-y: auto;">
+                <h4>نقاط الاهتمام التي أنشأتها:</h4>
+                <ul id="userPOIsList"></ul>
+            </div>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-mosque"></i> أوقات الصلاة (لمدينة كربلاء)</h3>
@@ -177,6 +182,15 @@
             <input type="tel" id="addMoazebPhone" placeholder="رقم الهاتف (يبدأ بـ 07)">
             <input type="text" id="addMoazebGov" placeholder="المحافظة">
             <input type="text" id="addMoazebDist" placeholder="القضاء/الناحية">
+            <select id="addMoazebType">
+                <option value="house">منزل</option>
+                <option value="mawkib">موكب</option>
+                <option value="hussainiya">حسينية</option>
+                <option value="tent">خيمة</option>
+                <option value="station">محطة</option>
+                <option value="sleep">مكان نوم</option>
+                <option value="food">مكان طعام</option>
+            </select>
             <button id="addMoazebBtn"><i class="fas fa-plus-circle"></i> إضافة المضيف</button>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
