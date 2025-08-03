@@ -1,6 +1,5 @@
 // server.js
 
-// تحميل متغيرات البيئة من ملف .env
 require('dotenv').config();
 
 const express = require('express');
@@ -8,28 +7,24 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const mongoose = require('mongoose');
-const axios = require('axios'); // لجلب أوقات الصلاة
+const axios = require('axios');
 
 const app = express();
 const server = http.createServer(app);
 
 const io = new socketIo.Server(server, {
     cors: {
-        origin: "*", // السماح بالاتصال من أي نطاق (ضروري للتطوير)
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
 
-// ====== الاتصال بقاعدة بيانات MongoDB ======
 const DB_URI = process.env.DB_URI || 'mongodb://localhost:27017/tareeq_aljannah';
 mongoose.connect(DB_URI)
 .then(() => console.log('✅ تم الاتصال بقاعدة بيانات MongoDB بنجاح!'))
 .catch(err => console.error('❌ خطأ في الاتصال بقاعدة بيانات MongoDB:', err));
 
-
-// ====== تعريف نماذج البيانات (Mongoose Schemas) ======
-
-// 1. نموذج المستخدم (User Model)
+// نماذج البيانات
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
@@ -52,16 +47,16 @@ const UserSchema = new mongoose.Schema({
         sound: { type: Boolean, default: true },
         hideBubbles: { type: Boolean, default: false },
         stealthMode: { type: Boolean, default: false },
-        emergencyWhatsapp: { type: String, default: '' }
+        emergencyWhatsapp: { type: String, default: '' },
+        showPhone: { type: Boolean, default: true },
+        showEmail: { type: Boolean, default: true }
     },
     gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
     phone: { type: String, default: '' },
     email: { type: String, default: '' },
     batteryStatus: { type: String, default: 'N/A' },
     lastSeen: { type: Date, default: Date.now },
-    // حفظ نقاط الاهتمام التي أنشأها المستخدم
     createdPOIs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CommunityPOI' }],
-    // حفظ نقطة التجمع الخاصة بالمستخدم
     meetingPoint: {
         name: { type: String },
         location: {
@@ -74,8 +69,6 @@ const UserSchema = new mongoose.Schema({
 UserSchema.index({ location: '2dsphere' });
 const User = mongoose.model('User', UserSchema);
 
-
-// 2. نموذج الرسائل (Message Model)
 const MessageSchema = new mongoose.Schema({
     senderId: { type: String, required: true },
     receiverId: { type: String, required: true },
@@ -85,8 +78,6 @@ const MessageSchema = new mongoose.Schema({
 MessageSchema.index({ "timestamp": 1 }, { expireAfterSeconds: 86400 });
 const Message = mongoose.model('Message', MessageSchema);
 
-
-// 3. نموذج المواقع المقدسة (Holy Site Model)
 const HolySiteSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
     coords: { type: [Number], required: true },
@@ -95,8 +86,6 @@ const HolySiteSchema = new mongoose.Schema({
 });
 const HolySite = mongoose.model('HolySite', HolySiteSchema);
 
-
-// 4. نموذج سجل المواقع التاريخية (HistoricalLocation Model)
 const HistoricalLocationSchema = new mongoose.Schema({
     userId: { type: String, required: true, index: true },
     location: {
@@ -109,12 +98,9 @@ HistoricalLocationSchema.index({ userId: 1, timestamp: -1 });
 HistoricalLocationSchema.index({ location: '2dsphere' });
 const HistoricalLocation = mongoose.model('HistoricalLocation', HistoricalLocationSchema);
 
-
-// 5. نموذج نقاط الاهتمام المجتمعية (CommunityPOI Model)
 const CommunityPOISchema = new mongoose.Schema({
     name: { type: String, required: true },
     description: { type: String },
-    // إضافة فئات جديدة
     category: { type: String, enum: ['Rest Area', 'Medical Post', 'Food Station', 'Water', 'Mosque', 'Parking', 'Info', 'Other'], default: 'Other' },
     location: {
         type: { type: String, enum: ['Point'], default: 'Point' },
@@ -129,8 +115,6 @@ const CommunityPOISchema = new mongoose.Schema({
 CommunityPOISchema.index({ location: '2dsphere' });
 const CommunityPOI = mongoose.model('CommunityPOI', CommunityPOISchema);
 
-
-// 6. نموذج المجموعة (Group Model)
 const GroupSchema = new mongoose.Schema({
     groupName: { type: String, required: true, unique: true },
     adminId: { type: String, required: true },
@@ -139,7 +123,6 @@ const GroupSchema = new mongoose.Schema({
 });
 const Group = mongoose.model('Group', GroupSchema);
 
-// 7. نموذج المعزب (Moazeb Model)
 const MoazebSchema = new mongoose.Schema({
     name: { type: String, required: true },
     address: { type: String, required: true },
@@ -155,8 +138,7 @@ const MoazebSchema = new mongoose.Schema({
 MoazebSchema.index({ location: '2dsphere' });
 const Moazeb = mongoose.model('Moazeb', MoazebSchema);
 
-
-// ====== إعدادات Express ======
+// إعدادات Express
 app.use(express.static(path.join(__dirname, '../')));
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
@@ -164,7 +146,7 @@ app.get('/', (req, res) => {
 
 const connectedUsers = {};
 
-// ====== منطق Socket.IO (التعامل مع اتصالات في الوقت الفعلي) ======
+// منطق Socket.IO
 io.on('connection', async (socket) => {
     console.log(`📡 مستخدم جديد متصل: ${socket.id}`);
 
@@ -174,7 +156,7 @@ io.on('connection', async (socket) => {
         const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
 
         try {
-            user = await User.findOne({ userId: userId }).populate('createdPOIs'); // <-- ** تعديل مهم لجلب تفاصيل POIs **
+            user = await User.findOne({ userId: userId }).populate('createdPOIs');
 
             if (!user) {
                 user = new User({
@@ -184,7 +166,9 @@ io.on('connection', async (socket) => {
                     location: { type: 'Point', coordinates: [0, 0] },
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
                     settings: {
-                        emergencyWhatsapp: emergencyWhatsapp || ''
+                        emergencyWhatsapp: emergencyWhatsapp || '',
+                        showPhone: true,
+                        showEmail: true
                     },
                     gender: gender || 'other',
                     phone: phone || '',
@@ -265,14 +249,12 @@ io.on('connection', async (socket) => {
                         email: updatedUser.email
                     };
 
-                    // إرسال التحديث للأصدقاء المرتبطين
                     updatedUser.linkedFriends.forEach(friendId => {
                          if (connectedUsers[friendId]) {
                             io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
                          }
                     });
 
-                    // إرسال التحديث للمستخدم نفسه
                     socket.emit('locationUpdate', locationData);
 
                 } else {
@@ -466,11 +448,15 @@ io.on('connection', async (socket) => {
             });
             await newPOI.save();
             
-            user.createdPOIs.push(newPOI._id);
-            await user.save();
+            await User.findByIdAndUpdate(
+                user._id,
+                { $push: { createdPOIs: newPOI._id } },
+                { new: true }
+            );
 
             socket.emit('poiStatus', { success: true, message: `✅ تم إضافة ${newPOI.name} بنجاح.` });
             io.emit('updatePOIs');
+            socket.emit('registerUser', { userId: user.userId });
 
         } catch (error) {
             console.error('❌ خطأ في إضافة POI:', error);
@@ -511,11 +497,13 @@ io.on('connection', async (socket) => {
                 location: { type: 'Point', coordinates: data.location }
             };
             await user.save();
+            
             const meetingData = {
                 creatorId: user.userId,
                 creatorName: user.name,
                 point: user.meetingPoint
             };
+            
             socket.emit('newMeetingPoint', meetingData);
             user.linkedFriends.forEach(friendId => {
                 if (connectedUsers[friendId]) {
@@ -609,7 +597,7 @@ io.on('connection', async (socket) => {
     });
 });
 
-// ====== تشغيل الخادم ======
+// تشغيل الخادم
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 الخادم يعمل على المنفذ: ${PORT}`);
