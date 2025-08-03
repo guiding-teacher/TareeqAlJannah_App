@@ -194,8 +194,24 @@ function createPOIMarker(poi) {
             <h3>${poi.name}</h3>
             <p>${poi.description || 'لا يوجد وصف'}</p>
             <p><strong>الفئة:</strong> ${poi.category}</p>
+            ${currentUser && poi.createdBy === currentUser.userId ? 
+                `<button class="delete-poi-btn" data-poi-id="${poi._id}"><i class="fas fa-trash"></i> حذف</button>` : ''}
         `))
         .addTo(map);
+
+    marker.getElement().addEventListener('click', () => {
+        setTimeout(() => {
+            const deleteBtn = document.querySelector(`.delete-poi-btn[data-poi-id="${poi._id}"]`);
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm(`هل أنت متأكد أنك تريد حذف نقطة الاهتمام "${poi.name}"؟`)) {
+                        socket.emit('deletePOI', { poiId: poi._id });
+                    }
+                });
+            }
+        }, 100);
+    });
 
     poiMarkers[poi._id] = marker;
     return marker;
@@ -222,6 +238,61 @@ function createMeetingPointMarker(data) {
         .addTo(map);
     
     meetingPointMarkers[creatorId] = marker;
+}
+
+function createMoazebMarker(moazeb) {
+    if (!moazeb || !moazeb.location || !moazeb.location.coordinates) return;
+
+    if (moazebMarkers[moazeb._id]) {
+        moazebMarkers[moazeb._id].remove();
+    }
+
+    const el = document.createElement('div');
+    el.className = 'moazeb-marker';
+    
+    // تحديد أيقونة حسب نوع المكان
+    let icon;
+    switch(moazeb.type) {
+        case 'mawkib': icon = '<i class="fas fa-flag"></i>'; break;
+        case 'hussainiya': icon = '<i class="fas fa-place-of-worship"></i>'; break;
+        case 'tent': icon = '<i class="fas fa-campground"></i>'; break;
+        case 'station': icon = '<i class="fas fa-gas-pump"></i>'; break;
+        case 'sleep': icon = '<i class="fas fa-bed"></i>'; break;
+        case 'food': icon = '<i class="fas fa-utensils"></i>'; break;
+        default: icon = '<i class="fas fa-home"></i>';
+    }
+    
+    el.innerHTML = icon;
+
+    const marker = new mapboxgl.Marker(el)
+        .setLngLat(moazeb.location.coordinates)
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
+            <h3>${moazeb.name}</h3>
+            <p><i class="fas fa-phone"></i> ${moazeb.phone}</p>
+            <p><i class="fas fa-map-marker-alt"></i> ${moazeb.address}</p>
+            <p><i class="fas fa-city"></i> ${moazeb.governorate} - ${moazeb.district}</p>
+            <button class="link-to-moazeb-btn" data-moazeb-id="${moazeb._id}">
+                <i class="fas fa-link"></i> الربط بالمضيف
+            </button>
+        `))
+        .addTo(map);
+
+    marker.getElement().addEventListener('click', () => {
+        setTimeout(() => {
+            const linkBtn = document.querySelector(`.link-to-moazeb-btn[data-moazeb-id="${moazeb._id}"]`);
+            if (linkBtn) {
+                linkBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm(`هل تريد الربط مع المضيف ${moazeb.name}؟`)) {
+                        socket.emit('linkToMoazeb', { moazebId: moazeb._id });
+                    }
+                });
+            }
+        }, 100);
+    });
+
+    moazebMarkers[moazeb._id] = marker;
+    return marker;
 }
 
 function clearAllDynamicMarkers() {
@@ -330,6 +401,10 @@ function showFriendsMap() {
              map.flyTo({ center: [43.6875, 33.3152], zoom: 6 });
         }
     }
+}
+
+function showAllMoazebOnMap() {
+    socket.emit('getAllMoazeb');
 }
 
 function drawGeneralPaths() {
@@ -580,9 +655,11 @@ function setupBottomChatBar() {
 
 function updateMyCreationsList() {
     const listContainer = document.getElementById('myCreationsList');
-    if (!listContainer || !currentUser) return;
+    const poisListContainer = document.getElementById('userPOIsList');
+    if (!listContainer || !poisListContainer || !currentUser) return;
 
     listContainer.innerHTML = ''; 
+    poisListContainer.innerHTML = '';
 
     let contentAdded = false;
 
@@ -604,6 +681,22 @@ function updateMyCreationsList() {
             const li = document.createElement('li');
             li.textContent = `${poi.name} (${poi.category})`;
             ul.appendChild(li);
+            
+            // Add to POIs list with delete button
+            const poiLi = document.createElement('li');
+            poiLi.innerHTML = `${poi.name} (${poi.category}) 
+                <button class="delete-poi-btn-small" data-poi-id="${poi._id}">
+                    <i class="fas fa-trash"></i>
+                </button>`;
+            poisListContainer.appendChild(poiLi);
+            
+            // Add event listener for delete button
+            poiLi.querySelector('.delete-poi-btn-small').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`هل أنت متأكد أنك تريد حذف نقطة الاهتمام "${poi.name}"؟`)) {
+                    socket.emit('deletePOI', { poiId: poi._id });
+                }
+            });
         });
         listContainer.appendChild(ul);
         contentAdded = true;
@@ -859,18 +952,26 @@ socket.on('moazebSearchResults', (data) => {
         data.results.forEach(moazeb => {
             const card = document.createElement('div');
             card.className = 'moazeb-card';
-            card.innerHTML = `<h4>${moazeb.name}</h4><p><i class="fas fa-map-marker-alt"></i> <strong>العنوان:</strong> ${moazeb.address}</p><p><i class="fas fa-phone"></i> <strong>الهاتف:</strong> ${moazeb.phone}</p><p><i class="fas fa-city"></i> <strong>المحافظة:</strong> ${moazeb.governorate} - ${moazeb.district}</p>`;
+            card.innerHTML = `
+                <h4>${moazeb.name}</h4>
+                <p><i class="fas fa-map-marker-alt"></i> <strong>العنوان:</strong> ${moazeb.address}</p>
+                <p><i class="fas fa-phone"></i> <strong>الهاتف:</strong> ${moazeb.phone}</p>
+                <p><i class="fas fa-city"></i> <strong>المحافظة:</strong> ${moazeb.governorate} - ${moazeb.district}</p>
+                <button class="link-to-moazeb-btn" data-moazeb-id="${moazeb._id}">
+                    <i class="fas fa-link"></i> الربط بالمضيف
+                </button>
+            `;
             resultsContainer.appendChild(card);
+            
+            // Add event listener for link button
+            card.querySelector('.link-to-moazeb-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`هل تريد الربط مع المضيف ${moazeb.name}؟`)) {
+                    socket.emit('linkToMoazeb', { moazebId: moazeb._id });
+                }
+            });
 
-            const el = document.createElement('div');
-            el.className = 'poi-marker';
-            el.style.backgroundColor = '#006400';
-            el.innerHTML = '<i class="fas fa-home"></i>';
-            const marker = new mapboxgl.Marker(el)
-                .setLngLat(moazeb.location.coordinates)
-                .setPopup(new mapboxgl.Popup().setHTML(`<h3>مضيف: ${moazeb.name}</h3><p>${moazeb.phone}</p>`))
-                .addTo(map);
-            moazebMarkers[moazeb._id] = marker;
+            createMoazebMarker(moazeb);
         });
         const bounds = new mapboxgl.LngLatBounds();
         data.results.forEach(m => bounds.extend(m.location.coordinates));
@@ -878,6 +979,43 @@ socket.on('moazebSearchResults', (data) => {
 
     } else {
         resultsContainer.innerHTML = '<p class="feature-info">لا توجد نتائج تطابق بحثك.</p>';
+    }
+});
+
+socket.on('allMoazebData', (data) => {
+    if (data.success && data.moazebs) {
+        Object.values(moazebMarkers).forEach(m => m.remove());
+        Object.keys(moazebMarkers).forEach(k => delete moazebMarkers[k]);
+        
+        data.moazebs.forEach(moazeb => {
+            createMoazebMarker(moazeb);
+        });
+        
+        if (data.moazebs.length > 0) {
+            const bounds = new mapboxgl.LngLatBounds();
+            data.moazebs.forEach(m => bounds.extend(m.location.coordinates));
+            map.fitBounds(bounds, { padding: 50 });
+        }
+    }
+});
+
+socket.on('linkToMoazebStatus', (data) => {
+    alert(data.message);
+    if (data.success) {
+        // يمكنك إضافة أي إجراء إضافي هنا بعد الربط الناجح
+    }
+});
+
+socket.on('poiDeleted', (data) => {
+    if (data.success) {
+        if (poiMarkers[data.poiId]) {
+            poiMarkers[data.poiId].remove();
+            delete poiMarkers[data.poiId];
+        }
+        socket.emit('registerUser', { userId: currentUser.userId });
+        alert('تم حذف نقطة الاهتمام بنجاح');
+    } else {
+        alert(`فشل حذف نقطة الاهتمام: ${data.message}`);
     }
 });
 
@@ -914,6 +1052,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showFriendsMap();
     });
     
+    document.getElementById('showAllMoazebBtn').addEventListener('click', () => {
+        showAllMoazebOnMap();
+    });
+    
     document.getElementById('initialInfoConfirmBtn').addEventListener('click', () => {
         const name = document.getElementById('initialInfoNameInput').value.trim();
         const gender = document.getElementById('initialInfoGenderSelect').value;
@@ -921,6 +1063,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const email = document.getElementById('initialInfoEmailInput').value.trim();
         
         if (name && gender !== 'other' && phone && email) {
+            if (!validateEmail(email)) {
+                alert('الرجاء إدخال بريد إلكتروني صحيح');
+                return;
+            }
+            
             localStorage.setItem('appUserName', name);
             localStorage.setItem('appUserGender', gender);
             localStorage.setItem('appUserPhone', phone);
@@ -933,6 +1080,11 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('الرجاء ملء جميع الحقول المطلوبة.');
         }
     });
+
+    function validateEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
 
     document.getElementById('showProfileBtn').addEventListener('click', () => {
         if (!currentUser) {
@@ -967,6 +1119,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const newEmail = document.getElementById('editEmailInput').value.trim();
 
         if (newName && newGender !== 'other' && newPhone && newEmail) {
+            if (!validateEmail(newEmail)) {
+                alert('الرجاء إدخال بريد إلكتروني صحيح');
+                return;
+            }
+            
             currentUser.name = newName;
             currentUser.gender = newGender;
             currentUser.phone = newPhone;
@@ -1144,7 +1301,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('setMeetingPointBtn').addEventListener('click', () => {
         const meetingPointName = document.getElementById('meetingPointInput').value.trim();
 
-        if (!currentUser || !currentUser.location || !currentUser.location.coordinates || (currentUser.location.coordinates[0] === 0 && currentUser.location.coordinates[1] === 0)) {
+        if (!currentUser || !currentUser.location || !currentUser.location.coordinates || (currentUser.location.coordinates[0] === 0 || currentUser.location.coordinates[1] === 0)) {
             alert("لا يمكن تحديد نقطة تجمع بدون تحديد موقعك الحالي أولاً.");
             return;
         }
@@ -1176,6 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
             phone: document.getElementById('addMoazebPhone').value.trim(),
             governorate: document.getElementById('addMoazebGov').value.trim(),
             district: document.getElementById('addMoazebDist').value.trim(),
+            type: document.getElementById('addMoazebType').value,
             location: currentUser.location.coordinates
         };
         if (!data.name || !data.address || !data.phone || !data.governorate || !data.district) {
