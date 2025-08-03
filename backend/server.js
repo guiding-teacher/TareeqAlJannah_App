@@ -174,7 +174,7 @@ io.on('connection', async (socket) => {
         const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
 
         try {
-            user = await User.findOne({ userId: userId });
+            user = await User.findOne({ userId: userId }).populate('createdPOIs'); // <-- ** تعديل مهم لجلب تفاصيل POIs **
 
             if (!user) {
                 user = new User({
