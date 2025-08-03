@@ -27,7 +27,7 @@ body {
 .main-header {
     background-image: linear-gradient(to right, #0056b3, var(--primary-color));
     color: white;
-    padding: 15px 20px;
+    padding: 15px 15px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -45,6 +45,7 @@ body {
 }
 
 .main-header nav button {
+    font-family:sans-serif;
     background-color: transparent;
     color: white;
     border: 2px solid white;
@@ -78,7 +79,7 @@ body {
 }
 
 .sos-btn {
-    background-color: var(--danger-color);
+    background-color: rgb(240, 13, 13);
     color: white;
     border: 2px solid #c82333;
     padding: 12px 20px;
@@ -89,10 +90,10 @@ body {
     transition: background-color 0.3s ease, transform 0.2s ease;
     display: flex;
     align-items: center;
-    gap: 8px;
     animation: sosPulse 1.5s infinite alternate;
     direction: rtl;
     unicode-bidi: embed;
+    text-align: center;
 }
 
 .sos-btn:hover {
@@ -445,13 +446,35 @@ input:checked + .slider:before { transform: translateX(26px); }
 .moazeb-card p { margin: 5px 0; font-size: 0.95em; color: #555; }
 .moazeb-card p i { margin-left: 8px; color: var(--secondary-color); }
 
+
+
+.moazeb-marker {
+    background-color: #006400; /* أخضر داكن */
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    border: 2px solid white;
+}
+
+.moazeb-marker i {
+    font-size: 14px;
+}
+
+
+
+
 @media (max-width: 768px) {
     .main-header { flex-direction: column; gap: 10px; padding: 10px; }
     .main-header h1 { font-size: 1.8em; }
     .main-header nav { display: flex; flex-wrap: wrap; justify-content: center; }
     .main-header nav button { margin: 5px; padding: 8px 10px; font-size: 0.8em; }
-    .sos-btn { position: static; margin-top: 10px; width: 100%; padding: 10px; }
-    .overlay-panel { min-width: unset; width: 95%; padding: 20px; gap: 15px; }
+    .sos-btn { text-align: center; color: rgba(255, 20, 0, 0.93); position: static; margin-top: 1px; width: 11%; padding: 10px; }
+    .overlay-panel { min-width: unset;  width: 95%; padding: 20px; gap: 15px; }
     .overlay-panel h2 { font-size: 1.5em; }
     .overlay-panel input, .overlay-panel select, .overlay-panel button { padding: 10px; font-size: 1em; }
     #userPhoto { width: 90px; height: 90px; }
