@@ -8,6 +8,8 @@ const socketIo = require('socket.io');
 const path = require('path');
 const mongoose = require('mongoose');
 const axios = require('axios');
+const bcrypt = require('bcryptjs');
+const jwt = 'jsonwebtoken';
 
 const app = express();
 const server = http.createServer(app);
@@ -26,10 +28,14 @@ mongoose.connect(DB_URI)
 
 // نماذج البيانات
 const UserSchema = new mongoose.Schema({
-    userId: { type: String, required: true, unique: true },
+    userId: { type: String, required: true, unique: true, index: true }, // Will be the phone number
+    password: { type: String, required: true },
     name: { type: String, required: true },
     photo: { type: String, default: 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER' },
     linkCode: { type: String, unique: true, sparse: true },
+    isVerified: { type: Boolean, default: false },
+    otp: { type: String },
+    otpExpires: { type: Date },
     location: {
         type: {
             type: String,
@@ -38,7 +44,7 @@ const UserSchema = new mongoose.Schema({
         },
         coordinates: {
             type: [Number],
-            required: true
+            default: [0, 0]
         }
     },
     linkedFriends: [{ type: String }],
@@ -52,7 +58,6 @@ const UserSchema = new mongoose.Schema({
         showEmail: { type: Boolean, default: true }
     },
     gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
-    phone: { type: String, default: '' },
     email: { type: String, default: '' },
     batteryStatus: { type: String, default: 'N/A' },
     lastSeen: { type: Date, default: Date.now },
@@ -63,9 +68,9 @@ const UserSchema = new mongoose.Schema({
             type: { type: String, enum: ['Point'], default: 'Point' },
             coordinates: { type: [Number] }
         },
-        expiresAt: { type: Date } // إضافة حقل تاريخ انتهاء الصلاحية
+        expiresAt: { type: Date }
     },
-    linkedMoazeb: { // إضافة حقل لربط المضيف
+    linkedMoazeb: {
         moazebId: { type: mongoose.Schema.Types.ObjectId, ref: 'Moazeb' },
         linkedAt: { type: Date }
     }
@@ -140,7 +145,7 @@ const MoazebSchema = new mongoose.Schema({
         coordinates: { type: [Number], required: true }
     },
     createdBy: { type: String, required: true },
-    linkedUsers: [{ type: String }] // إضافة حقل للمستخدمين المرتبطين
+    linkedUsers: [{ type: String }]
 }, { timestamps: true });
 MoazebSchema.index({ location: '2dsphere' });
 const Moazeb = mongoose.model('Moazeb', MoazebSchema);
@@ -153,7 +158,6 @@ app.get('/', (req, res) => {
 
 const connectedUsers = {};
 
-// وظيفة لحذف نقاط التجمع المنتهية
 async function cleanupExpiredMeetingPoints() {
     try {
         const result = await User.updateMany(
@@ -167,57 +171,39 @@ async function cleanupExpiredMeetingPoints() {
         console.error('خطأ في حذف نقاط التجمع المنتهية:', error);
     }
 }
-
-// تشغيل المهمة كل ساعة
 setInterval(cleanupExpiredMeetingPoints, 3600000);
 
-// منطق Socket.IO
+// Authentication Middleware for Socket.IO
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            socket.userId = decoded.userId; // userId is phone number
+            next();
+        } catch (err) {
+            console.log("Authentication error: Invalid token");
+            next(new Error("Authentication error"));
+        }
+    } else {
+        // Allow unauthenticated connections for login/register
+        next();
+    }
+});
+
+
 io.on('connection', async (socket) => {
     console.log(`📡 مستخدم جديد متصل: ${socket.id}`);
 
     let user;
 
-    socket.on('registerUser', async (data) => {
-        const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
-
-        try {
-            user = await User.findOne({ userId: userId }).populate('createdPOIs').populate('linkedMoazeb.moazebId');
-
-            if (!user) {
-                user = new User({
-                    userId: userId,
-                    name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
-                    photo: photo || 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER',
-                    location: { type: 'Point', coordinates: [0, 0] },
-                    linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
-                    settings: {
-                        emergencyWhatsapp: emergencyWhatsapp || '',
-                        showPhone: true,
-                        showEmail: true
-                    },
-                    gender: gender || 'other',
-                    phone: phone || '',
-                    email: email || ''
-                });
-                await user.save();
-                console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
-            } else {
-                if (name && user.name !== name) user.name = name;
-                if (photo && user.photo !== photo) user.photo = photo;
-                if (gender && user.gender !== gender) user.gender = gender;
-                if (phone && user.phone !== phone) user.phone = phone;
-                if (email && user.email !== email) user.email = email;
-                if (emergencyWhatsapp !== undefined && user.settings.emergencyWhatsapp !== emergencyWhatsapp) {
-                    user.settings.emergencyWhatsapp = emergencyWhatsapp;
-                }
-                user.lastSeen = Date.now();
-                await user.save();
-                console.log(`👤 مستخدم موجود في DB، تم تحديثه: ${user.name} (${user.userId})`);
-            }
-
+    // If connection is authenticated via middleware
+    if (socket.userId) {
+        console.log(`Authenticated user ${socket.userId} connected.`);
+        user = await User.findOne({ userId: socket.userId }).populate('createdPOIs').populate({ path: 'linkedMoazeb.moazebId' });
+        if (user) {
             connectedUsers[user.userId] = socket.id;
-            socket.userId = user.userId;
-
+            socket.emit('authenticationSuccess', { token: socket.handshake.auth.token });
             socket.emit('currentUserData', user);
 
             if (user.linkedFriends && user.linkedFriends.length > 0) {
@@ -225,21 +211,159 @@ io.on('connection', async (socket) => {
                 socket.emit('updateFriendsList', friendsData);
             }
 
-            // إرسال بيانات المضيف المرتبط إذا كان موجوداً
             if (user.linkedMoazeb && user.linkedMoazeb.moazebId) {
                 socket.emit('moazebConnectionData', { 
                     moazeb: user.linkedMoazeb.moazebId,
-                    connectionLine: user.linkedMoazeb.connectionLine || []
                 });
             }
+        } else {
+            // This case should ideally not happen if token is valid
+            socket.emit('authenticationFailed', { message: 'User not found.' });
+        }
+    } else {
+        console.log("An unauthenticated user connected.");
+    }
+    
+    // --- NEW AUTHENTICATION EVENTS ---
+    
+    socket.on('register', async (data) => {
+        const { phone, password, name } = data;
+        if (!phone || !password || !name) {
+            return socket.emit('authError', { message: 'الرجاء ملء جميع الحقول' });
+        }
+
+        try {
+            const existingUser = await User.findOne({ userId: phone });
+            if (existingUser) {
+                return socket.emit('authError', { message: 'رقم الهاتف هذا مسجل بالفعل.' });
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+            
+            const newUser = new User({
+                userId: phone,
+                password: hashedPassword,
+                name: name,
+                otp: otp,
+                otpExpires: otpExpires,
+                linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
+                location: { type: 'Point', coordinates: [0, 0] },
+            });
+            await newUser.save();
+            
+            // --- MOCK SMS SENDING ---
+            console.log(`[MOCK SMS] OTP for ${phone} is: ${otp}`);
+            // In a real application, you would integrate an SMS gateway here.
+            // For example: await sendSms(phone, `Your verification code is ${otp}`);
+            // --- END MOCK ---
+            
+            socket.emit('registrationSuccess', { message: `تم إرسال رمز التحقق إلى هاتفك. الرمز هو ${otp} (لأغراض الاختبار).` });
 
         } catch (error) {
-            console.error('❌ خطأ في معالجة تسجيل المستخدم:', error);
-            socket.emit('registrationFailed', { message: 'فشل تسجيل المستخدم.' });
-            socket.disconnect(true);
-            return;
+            console.error("Registration error:", error);
+            socket.emit('authError', { message: 'حدث خطأ أثناء التسجيل.' });
         }
     });
+
+    socket.on('verify-otp', async (data) => {
+        const { phone, otp } = data;
+        if (!phone || !otp) {
+            return socket.emit('authError', { message: 'بيانات التحقق ناقصة.' });
+        }
+
+        try {
+            const userToVerify = await User.findOne({ userId: phone });
+            if (!userToVerify) {
+                return socket.emit('authError', { message: 'المستخدم غير موجود.' });
+            }
+            if (userToVerify.otp !== otp || userToVerify.otpExpires < new Date()) {
+                return socket.emit('authError', { message: 'رمز التحقق غير صحيح أو منتهي الصلاحية.' });
+            }
+
+            userToVerify.isVerified = true;
+            userToVerify.otp = undefined;
+            userToVerify.otpExpires = undefined;
+            await userToVerify.save();
+            
+            const token = jwt.sign({ userId: userToVerify.userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
+            
+            socket.emit('authenticationSuccess', { token });
+
+        } catch(error) {
+            console.error("OTP verification error:", error);
+            socket.emit('authError', { message: 'حدث خطأ أثناء التحقق.' });
+        }
+    });
+
+    socket.on('login', async (data) => {
+        const { phone, password } = data;
+        if (!phone || !password) {
+            return socket.emit('authError', { message: 'الرجاء إدخال رقم الهاتف وكلمة المرور.' });
+        }
+
+        try {
+            const userToLogin = await User.findOne({ userId: phone });
+            if (!userToLogin) {
+                return socket.emit('authError', { message: 'رقم الهاتف أو كلمة المرور غير صحيحة.' });
+            }
+
+            const isMatch = await bcrypt.compare(password, userToLogin.password);
+            if (!isMatch) {
+                return socket.emit('authError', { message: 'رقم الهاتف أو كلمة المرور غير صحيحة.' });
+            }
+
+            if (!userToLogin.isVerified) {
+                 // Resend OTP if not verified
+                const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+                userToLogin.otp = otp;
+                userToLogin.otpExpires = otpExpires;
+                await userToLogin.save();
+                console.log(`[MOCK SMS] New OTP for unverified user ${phone} is: ${otp}`);
+                return socket.emit('verificationRequired', { message: `حسابك غير مفعل. تم إرسال رمز تحقق جديد. الرمز هو ${otp} (لأغراض الاختبار).` });
+            }
+
+            const token = jwt.sign({ userId: userToLogin.userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+            socket.emit('authenticationSuccess', { token });
+
+        } catch (error) {
+            console.error("Login error:", error);
+            socket.emit('authError', { message: 'حدث خطأ أثناء تسجيل الدخول.' });
+        }
+    });
+
+
+    // --- REGULAR APP EVENTS (PROTECTED BY AUTH) ---
+    
+    // This is a placeholder for the old 'registerUser' logic.
+    // It's now used for updating secondary user info after initial login.
+    socket.on('updateInitialInfo', async (data) => {
+        if (!socket.userId) return;
+        const { name, gender, email, emergencyWhatsapp } = data;
+        
+        try {
+            const userToUpdate = await User.findOne({ userId: socket.userId });
+            if (!userToUpdate) return;
+            
+            if (name && userToUpdate.name !== name) userToUpdate.name = name;
+            if (gender && userToUpdate.gender !== gender) userToUpdate.gender = gender;
+            if (email && userToUpdate.email !== email) userToUpdate.email = email;
+            if (emergencyWhatsapp !== undefined && userToUpdate.settings.emergencyWhatsapp !== emergencyWhatsapp) {
+                userToUpdate.settings.emergencyWhatsapp = emergencyWhatsapp;
+            }
+            userToUpdate.lastSeen = Date.now();
+            await userToUpdate.save();
+
+            socket.emit('currentUserData', userToUpdate); // Send back the updated data
+
+        } catch (error) {
+            console.error('Error updating initial info:', error);
+        }
+    });
+
 
     socket.on('updateLocation', async (data) => {
         if (!socket.userId || !data.location) return;
@@ -278,7 +402,7 @@ io.on('connection', async (socket) => {
                         settings: updatedUser.settings,
                         lastSeen: updatedUser.lastSeen,
                         gender: updatedUser.gender,
-                        phone: updatedUser.phone,
+                        phone: updatedUser.userId, // Phone is the userId
                         email: updatedUser.email
                     };
 
@@ -290,23 +414,19 @@ io.on('connection', async (socket) => {
 
                     socket.emit('locationUpdate', locationData);
 
-                    // إذا كان المستخدم مرتبطاً بمضيف، تحديث خط الربط
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
-                            // إنشاء خط مسار يعكس الطرق الفعلية
-                            const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
-                            const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
-                            
-                            await User.updateOne(
-                                { userId: updatedUser.userId },
-                                { 'linkedMoazeb.connectionLine': connectionLine }
-                            );
-                            
-                            socket.emit('moazebConnectionUpdate', {
-                                moazebId: moazeb._id,
-                                connectionLine: connectionLine
-                            });
+                            try {
+                                const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`);
+                                const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
+                                socket.emit('moazebConnectionUpdate', {
+                                    moazebId: moazeb._id,
+                                    connectionLine: connectionLine
+                                });
+                            } catch (apiError) {
+                                console.error("Mapbox API error:", apiError.message);
+                            }
                         }
                     }
                 } else {
@@ -396,9 +516,9 @@ io.on('connection', async (socket) => {
     socket.on('updateSettings', async (data) => {
         if (!user) return;
         try {
-            user.settings = { ...user.settings, ...data };
+            user.settings = { ...user.settings, ...data.settings };
+            if (data.name !== undefined) user.name = data.name;
             if (data.gender !== undefined) user.gender = data.gender;
-            if (data.phone !== undefined) user.phone = data.phone;
             if (data.email !== undefined) user.email = data.email;
 
             await user.save();
@@ -412,7 +532,7 @@ io.on('connection', async (socket) => {
                         userId: user.userId, name: user.name, photo: user.photo,
                         location: user.location.coordinates, battery: user.batteryStatus,
                         settings: user.settings, lastSeen: user.lastSeen, gender: user.gender,
-                        phone: user.phone, email: user.email
+                        phone: user.userId, email: user.email
                     };
                     user.linkedFriends.forEach(friendId => {
                         if (connectedUsers[friendId]) {
@@ -500,15 +620,12 @@ io.on('connection', async (socket) => {
             });
             await newPOI.save();
             
-            await User.findByIdAndUpdate(
-                user._id,
-                { $push: { createdPOIs: newPOI._id } },
-                { new: true }
-            );
+            user.createdPOIs.push(newPOI._id);
+            await user.save();
 
             socket.emit('poiStatus', { success: true, message: `✅ تم إضافة ${newPOI.name} بنجاح.` });
             io.emit('updatePOIs');
-            socket.emit('registerUser', { userId: user.userId });
+            socket.emit('currentUserData', await User.findById(user._id).populate('createdPOIs'));
 
         } catch (error) {
             console.error('❌ خطأ في إضافة POI:', error);
@@ -535,13 +652,13 @@ io.on('connection', async (socket) => {
             await CommunityPOI.findByIdAndDelete(poiId);
             await User.findByIdAndUpdate(
                 user._id,
-                { $pull: { createdPOIs: poiId } },
-                { new: true }
+                { $pull: { createdPOIs: poiId } }
             );
 
             socket.emit('poiDeleted', { success: true, message: 'تم الحذف بنجاح.', poiId });
             io.emit('updatePOIs');
-            socket.emit('registerUser', { userId: user.userId });
+            socket.emit('currentUserData', await User.findById(user._id).populate('createdPOIs'));
+
 
         } catch (error) {
             console.error('❌ خطأ في حذف POI:', error);
@@ -577,7 +694,6 @@ io.on('connection', async (socket) => {
     socket.on('setMeetingPoint', async (data) => {
         if (!user || !data.name || !data.location) return;
         try {
-            // تعيين تاريخ انتهاء بعد 24 ساعة
             const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
             
             user.meetingPoint = {
@@ -652,6 +768,7 @@ io.on('connection', async (socket) => {
 
         } catch (error) {
             console.error('❌ خطأ في البحث عن مضيف:', error);
+            socket.emit('moazebSearchResults', { success: false, message: 'خطأ بالخادم' });
         }
     });
 
@@ -668,35 +785,33 @@ io.on('connection', async (socket) => {
     socket.on('linkToMoazeb', async (data) => {
         const { moazebId } = data;
         if (!user || !moazebId) {
-            socket.emit('linkToMoazebStatus', { success: false, message: 'بيانات ناقصة.' });
-            return;
+            return socket.emit('linkToMoazebStatus', { success: false, message: 'بيانات ناقصة.' });
         }
 
         try {
             const moazeb = await Moazeb.findById(moazebId);
             if (!moazeb) {
-                socket.emit('linkToMoazebStatus', { success: false, message: 'المضيف غير موجود.' });
-                return;
+                return socket.emit('linkToMoazebStatus', { success: false, message: 'المضيف غير موجود.' });
             }
 
-            // إضافة المستخدم إلى قائمة المرتبطين بالمضيف
             if (!moazeb.linkedUsers.includes(user.userId)) {
                 moazeb.linkedUsers.push(user.userId);
                 await moazeb.save();
             }
 
-            // إنشاء خط مسار يعكس الطرق الفعلية
             let connectionLine = [];
-            if (user.location && user.location.coordinates) {
-                const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
-                connectionLine = routeResponse.data.routes[0].geometry.coordinates;
+            if (user.location && user.location.coordinates && user.location.coordinates[0] !== 0) {
+                 try {
+                    const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`);
+                    connectionLine = routeResponse.data.routes[0].geometry.coordinates;
+                 } catch (apiError) {
+                    console.error("Mapbox API error on linking:", apiError.message);
+                 }
             }
 
-            // تحديث بيانات الربط للمستخدم
             user.linkedMoazeb = {
                 moazebId: moazeb._id,
                 linkedAt: new Date(),
-                connectionLine: connectionLine
             };
             await user.save();
 
@@ -707,7 +822,6 @@ io.on('connection', async (socket) => {
                 connectionLine: connectionLine
             });
 
-            // إرسال بيانات الربط إلى العميل
             socket.emit('moazebConnectionData', { 
                 moazeb: moazeb,
                 connectionLine: connectionLine
@@ -715,7 +829,7 @@ io.on('connection', async (socket) => {
 
         } catch (error) {
             console.error('❌ خطأ في الربط مع المضيف:', error);
-            socket.emit('linkToMoazebStatus', { success: false, message: 'حدث خطأ في الخادم.' });
+            socket.emit('linkToMoazebStatus', { success: false, message: 'حدث خطأ في الخادم. قد يكون بسبب عدم توفر مفتاح Mapbox API على الخادم.' });
         }
     });
 
@@ -727,7 +841,6 @@ io.on('connection', async (socket) => {
             user.linkedMoazeb = undefined;
             await user.save();
 
-            // إزالة المستخدم من قائمة المرتبطين بالمضيف
             await Moazeb.findByIdAndUpdate(moazebId, {
                 $pull: { linkedUsers: user.userId }
             });
@@ -736,8 +849,6 @@ io.on('connection', async (socket) => {
                 success: true, 
                 message: 'تم إلغاء الربط مع المضيف بنجاح.'
             });
-
-            // إرسال حدث لإزالة خط الربط من الخريطة
             socket.emit('moazebConnectionRemoved');
 
         } catch (error) {
@@ -751,9 +862,9 @@ io.on('connection', async (socket) => {
 
     socket.on('requestPrayerTimes', async () => {
         try {
-            const latitude = 32.6163; // كربلاء
-            const longitude = 44.0249; // كربلاء
-            const method = 2; // Jafari (Ithna Ashari)
+            const latitude = 32.6163;
+            const longitude = 44.0249;
+            const method = 2;
             const date = new Date();
             const dateString = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
             
@@ -780,7 +891,6 @@ io.on('connection', async (socket) => {
     });
 });
 
-// تشغيل الخادم
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 الخادم يعمل على المنفذ: ${PORT}`);
