@@ -47,7 +47,6 @@
 </head>
     <!-- إضافة هذا الجزء قبل </body> -->
 <script>
-    // إضافة أزرار التحكم بالخريطة
     document.addEventListener('DOMContentLoaded', function() {
         // سيتم إضافة الأزرار تلقائياً بواسطة الدالة setupMapControls()
     });
@@ -70,7 +69,29 @@
         
     </header>
 
-    <div id="map"></div>
+    <div id="map">
+        <!-- *** تعديل: إضافة حاوية زر الحالة الجديد *** -->
+        <div class="status-controls">
+            <button id="statusBtn" class="map-control-btn" title="تغيير حالتي"><i class="fas fa-smile"></i></button>
+            <div id="statusOptions" class="status-options">
+                <div class="status-option" data-status-text="أتناول الطعام" data-status-icon="fas fa-utensils">
+                    <i class="fas fa-utensils"></i> أتناول الطعام
+                </div>
+                <div class="status-option" data-status-text="أصلي" data-status-icon="fas fa-mosque">
+                    <i class="fas fa-mosque"></i> أصلي
+                </div>
+                <div class="status-option" data-status-text="نائم" data-status-icon="fas fa-bed">
+                    <i class="fas fa-bed"></i> نائم
+                </div>
+                <div class="status-option" data-status-text="في استراحة" data-status-icon="fas fa-coffee">
+                    <i class="fas fa-coffee"></i> في استراحة
+                </div>
+                <div class="status-option" data-status-text="بحاجة لمساعدة" data-status-icon="fas fa-hands-helping">
+                    <i class="fas fa-hands-helping"></i> بحاجة لمساعدة
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="bottomChatBar" class="bottom-chat-bar">
         <select id="bottomChatFriendSelect"></select>
