@@ -1,4 +1,4 @@
-// server.js
+// server.js - كود السيرفر الكامل
 
 require('dotenv').config();
 
@@ -63,11 +63,12 @@ const UserSchema = new mongoose.Schema({
             type: { type: String, enum: ['Point'], default: 'Point' },
             coordinates: { type: [Number] }
         },
-        expiresAt: { type: Date } // إضافة حقل تاريخ انتهاء الصلاحية
+        expiresAt: { type: Date }
     },
-    linkedMoazeb: { // إضافة حقل لربط المضيف
+    linkedMoazeb: {
         moazebId: { type: mongoose.Schema.Types.ObjectId, ref: 'Moazeb' },
-        linkedAt: { type: Date }
+        linkedAt: { type: Date },
+        connectionLine: { type: [[Number]] }
     }
 }, { timestamps: true });
 
@@ -140,7 +141,7 @@ const MoazebSchema = new mongoose.Schema({
         coordinates: { type: [Number], required: true }
     },
     createdBy: { type: String, required: true },
-    linkedUsers: [{ type: String }] // إضافة حقل للمستخدمين المرتبطين
+    linkedUsers: [{ type: String }]
 }, { timestamps: true });
 MoazebSchema.index({ location: '2dsphere' });
 const Moazeb = mongoose.model('Moazeb', MoazebSchema);
@@ -294,7 +295,6 @@ io.on('connection', async (socket) => {
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
-                            // إنشاء خط مسار يعكس الطرق الفعلية
                             const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
                             const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
                             
@@ -577,7 +577,6 @@ io.on('connection', async (socket) => {
     socket.on('setMeetingPoint', async (data) => {
         if (!user || !data.name || !data.location) return;
         try {
-            // تعيين تاريخ انتهاء بعد 24 ساعة
             const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
             
             user.meetingPoint = {
@@ -679,20 +678,17 @@ io.on('connection', async (socket) => {
                 return;
             }
 
-            // إضافة المستخدم إلى قائمة المرتبطين بالمضيف
             if (!moazeb.linkedUsers.includes(user.userId)) {
                 moazeb.linkedUsers.push(user.userId);
                 await moazeb.save();
             }
 
-            // إنشاء خط مسار يعكس الطرق الفعلية
             let connectionLine = [];
             if (user.location && user.location.coordinates) {
                 const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
                 connectionLine = routeResponse.data.routes[0].geometry.coordinates;
             }
 
-            // تحديث بيانات الربط للمستخدم
             user.linkedMoazeb = {
                 moazebId: moazeb._id,
                 linkedAt: new Date(),
@@ -707,7 +703,6 @@ io.on('connection', async (socket) => {
                 connectionLine: connectionLine
             });
 
-            // إرسال بيانات الربط إلى العميل
             socket.emit('moazebConnectionData', { 
                 moazeb: moazeb,
                 connectionLine: connectionLine
@@ -727,7 +722,6 @@ io.on('connection', async (socket) => {
             user.linkedMoazeb = undefined;
             await user.save();
 
-            // إزالة المستخدم من قائمة المرتبطين بالمضيف
             await Moazeb.findByIdAndUpdate(moazebId, {
                 $pull: { linkedUsers: user.userId }
             });
@@ -737,7 +731,6 @@ io.on('connection', async (socket) => {
                 message: 'تم إلغاء الربط مع المضيف بنجاح.'
             });
 
-            // إرسال حدث لإزالة خط الربط من الخريطة
             socket.emit('moazebConnectionRemoved');
 
         } catch (error) {
@@ -751,9 +744,9 @@ io.on('connection', async (socket) => {
 
     socket.on('requestPrayerTimes', async () => {
         try {
-            const latitude = 32.6163; // كربلاء
-            const longitude = 44.0249; // كربلاء
-            const method = 2; // Jafari (Ithna Ashari)
+            const latitude = 32.6163;
+            const longitude = 44.0249;
+            const method = 2;
             const date = new Date();
             const dateString = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
             
