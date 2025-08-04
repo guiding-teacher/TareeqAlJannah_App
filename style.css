@@ -285,6 +285,7 @@ body {
     z-index: 5;
 }
 
+/* *** تعديل: تصغير حجم صورة المستخدم على الخريطة *** */
 .user-marker-photo {
     width: 45px;
     height: 45px;
@@ -445,14 +446,7 @@ input:checked + .slider:before { transform: translateX(26px); }
 .moazeb-card h4 { margin: 0 0 10px 0; color: var(--primary-color); }
 .moazeb-card p { margin: 5px 0; font-size: 0.95em; color: #555; }
 .moazeb-card p i { margin-left: 8px; color: var(--secondary-color); }
-/* *** تعديل: إضافة هامش للأزرار داخل بطاقة المضيف *** */
-.moazeb-card button {
-    margin-top: 5px;
-    margin-left: 5px;
-    width: auto;
-    padding: 8px 12px;
-    font-size: 0.9em;
-}
+
 
 
 .moazeb-marker {
@@ -501,6 +495,29 @@ input:checked + .slider:before { transform: translateX(26px); }
 .moazeb-marker i {
     font-size: 14px;
 }
+
+/* style.css - إضافة بعض التعديلات */
+
+/* ... [بقية الكود يبقى كما هو] */
+
+.locate-moazeb-btn {
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    margin-top: 5px;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+}
+
+.locate-moazeb-btn:hover {
+    background-color: #138496;
+}
+
+/* ... [بقية الكود يبقى كما هو] */
+
 
 @media (max-width: 768px) {
     .main-header { flex-direction: column; gap: 0px; padding: 5px; }
