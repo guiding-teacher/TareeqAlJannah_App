@@ -193,7 +193,7 @@ io.on('connection', async (socket) => {
                 user = new User({
                     userId: userId,
                     name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
-                    photo: photo || 'image/Picsart_25-08-03_16-47-02-591.png',
+                    photo: photo || 'image/Picsart_25-08-03_16-47-02-591.png', // *** تعديل: استخدام الصورة المحلية كافتراضي
                     location: { type: 'Point', coordinates: [0, 0] },
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
                     settings: {
@@ -229,26 +229,6 @@ io.on('connection', async (socket) => {
             if (user.linkedFriends && user.linkedFriends.length > 0) {
                 const friendsData = await User.find({ userId: { $in: user.linkedFriends } });
                 socket.emit('updateFriendsList', friendsData);
-                
-                // *** تعديل: إرسال نقاط التجمع الخاصة بالأصدقاء للمستخدم المتصل حديثاً ***
-                friendsData.forEach(friend => {
-                    if (friend.meetingPoint && friend.meetingPoint.name && new Date(friend.meetingPoint.expiresAt) > new Date()) {
-                        socket.emit('newMeetingPoint', {
-                            creatorId: friend.userId,
-                            creatorName: friend.name,
-                            point: friend.meetingPoint
-                        });
-                    }
-                });
-            }
-            
-            // *** تعديل: إرسال نقطة التجمع الخاصة بالمستخدم نفسه (إذا كانت موجودة) ***
-            if (user.meetingPoint && user.meetingPoint.name && new Date(user.meetingPoint.expiresAt) > new Date()) {
-                 socket.emit('newMeetingPoint', {
-                    creatorId: user.userId,
-                    creatorName: user.name,
-                    point: user.meetingPoint
-                });
             }
 
             // إرسال بيانات المضيف المرتبط إذا كان موجوداً
@@ -300,7 +280,7 @@ io.on('connection', async (socket) => {
                         name: updatedUser.name,
                         photo: updatedUser.photo,
                         location: updatedUser.location.coordinates,
-                        batteryStatus: updatedUser.batteryStatus,
+                        batteryStatus: updatedUser.batteryStatus, // إرسال الاسم الصحيح للحقل
                         settings: updatedUser.settings,
                         lastSeen: updatedUser.lastSeen,
                         gender: updatedUser.gender,
@@ -308,8 +288,10 @@ io.on('connection', async (socket) => {
                         email: updatedUser.email
                     };
                     
+                    // إرسال التحديث للمستخدم نفسه
                     socket.emit('locationUpdate', locationData);
                     
+                    // إرسال التحديث للأصدقاء المرتبطين
                     updatedUser.linkedFriends.forEach(friendId => {
                          if (connectedUsers[friendId]) {
                             io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
@@ -317,9 +299,11 @@ io.on('connection', async (socket) => {
                     });
 
 
+                    // إذا كان المستخدم مرتبطاً بمضيف، تحديث خط الربط
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
+                            // *** تعديل: استخدام مفتاح الخادم بدلاً من مفتاح العميل
                             const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`);
                             const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
                             
@@ -533,6 +517,7 @@ io.on('connection', async (socket) => {
 
             socket.emit('poiStatus', { success: true, message: `✅ تم إضافة ${newPOI.name} بنجاح.` });
             
+            // *** تعديل: إرسال النقطة الجديدة لجميع المستخدمين المتصلين
             io.emit('newPOIAdded', newPOI);
 
         } catch (error) {
@@ -566,6 +551,7 @@ io.on('connection', async (socket) => {
 
             socket.emit('poiDeleted', { success: true, message: 'تم الحذف بنجاح.', poiId });
             
+            // *** تعديل: إعلام جميع المستخدمين بحذف النقطة
             io.emit('poiDeletedBroadcast', { poiId: poiId });
 
         } catch (error) {
@@ -600,51 +586,61 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('setMeetingPoint', async (data) => {
-        if (!user || !data.name || !data.location) return;
-        try {
-            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            
-            user.meetingPoint = {
-                name: data.name,
-                location: { type: 'Point', coordinates: data.location },
-                expiresAt: expiresAt
-            };
-            await user.save();
-            
-            const meetingData = {
-                creatorId: user.userId,
-                creatorName: user.name,
-                point: user.meetingPoint
-            };
-            
-            io.to(socket.id).emit('newMeetingPoint', meetingData);
-            user.linkedFriends.forEach(friendId => {
-                if (connectedUsers[friendId]) {
-                    io.to(connectedUsers[friendId]).emit('newMeetingPoint', meetingData);
-                }
-            });
-        } catch (error) {
-            console.error('❌ خطأ في تحديد نقطة التجمع:', error);
-        }
-    });
+    if (!user || !data.name || !data.location) return;
+    try {
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        
+        user.meetingPoint = {
+            name: data.name,
+            location: { type: 'Point', coordinates: data.location },
+            expiresAt: expiresAt
+        };
+        await user.save();
+        
+        const meetingData = {
+            creatorId: user.userId,
+            creatorName: user.name,
+            point: user.meetingPoint
+        };
+        
+        // إرسال نقطة التجمع للمنشئ وجميع الأصدقاء
+        io.to(socket.id).emit('newMeetingPoint', meetingData);
+        user.linkedFriends.forEach(friendId => {
+            if (connectedUsers[friendId]) {
+                io.to(connectedUsers[friendId]).emit('newMeetingPoint', meetingData);
+            }
+        });
+
+        // إرسال نقطة التجمع لكل المستخدمين عند طلب الخريطة العامة
+        io.emit('newMeetingPointBroadcast', meetingData);
+
+    } catch (error) {
+        console.error('❌ خطأ في تحديد نقطة التجمع:', error);
+    }
+});
 
     socket.on('clearMeetingPoint', async () => {
-        if (!user) return;
-        try {
-            const creatorId = user.userId;
-            user.meetingPoint = undefined;
-            await user.save();
+    if (!user) return;
+    try {
+        const creatorId = user.userId;
+        user.meetingPoint = undefined;
+        await user.save();
 
-            io.to(socket.id).emit('meetingPointCleared', { creatorId });
-            user.linkedFriends.forEach(friendId => {
-                if (connectedUsers[friendId]) {
-                    io.to(connectedUsers[friendId]).emit('meetingPointCleared', { creatorId });
-                }
-            });
-        } catch (error) {
-            console.error('❌ خطأ في إنهاء نقطة التجمع:', error);
-        }
-    });
+        // إعلام المنشئ وجميع الأصدقاء بانتهاء نقطة التجمع
+        io.to(socket.id).emit('meetingPointCleared', { creatorId });
+        user.linkedFriends.forEach(friendId => {
+            if (connectedUsers[friendId]) {
+                io.to(connectedUsers[friendId]).emit('meetingPointCleared', { creatorId });
+            }
+        });
+
+        // إعلام جميع المستخدمين بإزالة نقطة التجمع
+        io.emit('meetingPointClearedBroadcast', { creatorId });
+
+    } catch (error) {
+        console.error('❌ خطأ في إنهاء نقطة التجمع:', error);
+    }
+});
 
     socket.on('addMoazeb', async (data) => {
         if (!user || !data.name || !data.address || !data.phone || !data.governorate || !data.district || !data.location) {
@@ -711,6 +707,7 @@ io.on('connection', async (socket) => {
 
             let connectionLine = [];
             if (user.location && user.location.coordinates && user.location.coordinates[0] !== 0) {
+                 // *** تعديل: استخدام مفتاح الخادم بدلاً من مفتاح العميل
                 const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`);
                 connectionLine = routeResponse.data.routes[0].geometry.coordinates;
             }
