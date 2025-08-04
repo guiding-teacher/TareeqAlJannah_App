@@ -790,6 +790,121 @@ function updateMyCreationsList() {
     }
 }
 
+
+
+
+// إضافة هذه الأجزاء إلى ملف script.js
+
+// أزرار التحكم بالخريطة
+function setupMapControls() {
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'map-controls';
+    
+    const zoomInBtn = document.createElement('button');
+    zoomInBtn.className = 'map-control-btn';
+    zoomInBtn.innerHTML = '<i class="fas fa-plus"></i>';
+    zoomInBtn.title = 'تكبير';
+    zoomInBtn.addEventListener('click', () => map.zoomIn());
+    
+    const zoomOutBtn = document.createElement('button');
+    zoomOutBtn.className = 'map-control-btn';
+    zoomOutBtn.innerHTML = '<i class="fas fa-minus"></i>';
+    zoomOutBtn.title = 'تصغير';
+    zoomOutBtn.addEventListener('click', () => map.zoomOut());
+    
+    const rotateBtn = document.createElement('button');
+    rotateBtn.className = 'map-control-btn';
+    rotateBtn.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    rotateBtn.title = 'تدوير الخريطة';
+    rotateBtn.addEventListener('click', () => {
+        map.setBearing(0);
+        map.setPitch(45);
+    });
+    
+    controlsDiv.appendChild(zoomInBtn);
+    controlsDiv.appendChild(zoomOutBtn);
+    controlsDiv.appendChild(rotateBtn);
+    
+    document.getElementById('map').appendChild(controlsDiv);
+}
+
+// تعديل وظيفة عرض فقاعة الرسالة
+function showMessageBubble(userId, messageText) {
+    const bubble = document.getElementById(`msg-bubble-${userId}`);
+    if (bubble) {
+        if (activeMessageTimers[userId]) {
+            clearTimeout(activeMessageTimers[userId]);
+        }
+        bubble.textContent = messageText;
+        bubble.classList.add('show');
+        activeMessageTimers[userId] = setTimeout(() => {
+            bubble.classList.remove('show');
+        }, 30000); // 30 ثانية بدلاً من الاختفاء الفوري
+    }
+}
+
+// تعديل وظيفة تحديث الموقع لتجنب إخفاء الفقاعات
+socket.on('locationUpdate', (data) => {
+    let userToUpdate;
+    if (currentUser && data.userId === currentUser.userId) {
+        currentUser.location = { type: 'Point', coordinates: data.location };
+        userToUpdate = currentUser;
+    } else {
+        userToUpdate = linkedFriends.find(f => f.userId === data.userId);
+    }
+    
+    if (userToUpdate) {
+        Object.assign(userToUpdate, data);
+        userToUpdate.location = { type: 'Point', coordinates: data.location };
+        if (!userToUpdate.settings.shareLocation || userToUpdate.settings.stealthMode) {
+            if (friendMarkers[userToUpdate.userId]) {
+                friendMarkers[userToUpdate.userId].remove();
+                delete friendMarkers[userToUpdate.userId];
+            }
+        } else {
+            if (userToUpdate.location && userToUpdate.location.coordinates) {
+                createCustomMarker(userToUpdate);
+            }
+        }
+    }
+});
+
+// تعديل وظيفة الربط بالمضيف
+socket.on('linkToMoazebStatus', (data) => {
+    if (data.success) {
+        alert(data.message);
+        // إظهار خط الربط على الخريطة
+        if (data.connectionLine && data.connectionLine.length > 0) {
+            drawMoazebConnectionLine(data.connectionLine);
+        }
+        // تحديث بيانات المستخدم
+        socket.emit('registerUser', { userId: currentUser.userId });
+    } else {
+        alert(data.message || 'حدث خطأ في الربط مع المضيف');
+    }
+});
+
+// تعديل وظيفة نقطة التجمع
+socket.on('newMeetingPoint', (data) => {
+    createMeetingPointMarker(data);
+    if (currentUser && data.creatorId === currentUser.userId) {
+        document.getElementById('endMeetingPointBtn').style.display = 'block';
+        updateMyCreationsList();
+    }
+});
+
+// إضافة التحكم بالخريطة عند التحميل
+map.on('load', () => {
+    showGeneralMap();
+    document.getElementById('showGeneralMapBtn').classList.add('active');
+    setupMapControls(); // إضافة أزرار التحكم
+});
+
+
+
+
+
+
 // التعامل مع أحداث WebSocket من الخادم
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId');
