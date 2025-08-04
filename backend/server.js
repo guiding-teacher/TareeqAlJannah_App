@@ -5,10 +5,9 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const path = path.join(__dirname, '../');
+const path = require('path');
 const mongoose = require('mongoose');
 const axios = require('axios');
-const bcrypt = require('bcryptjs');
 
 const app = express();
 const server = http.createServer(app);
@@ -29,8 +28,6 @@ mongoose.connect(DB_URI)
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    phone: { type: String, required: true, unique: true, sparse: true },
-    password: { type: String, required: true },
     photo: { type: String, default: 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER' },
     linkCode: { type: String, unique: true, sparse: true },
     location: {
@@ -41,7 +38,7 @@ const UserSchema = new mongoose.Schema({
         },
         coordinates: {
             type: [Number],
-            default: [0, 0]
+            required: true
         }
     },
     linkedFriends: [{ type: String }],
@@ -55,6 +52,7 @@ const UserSchema = new mongoose.Schema({
         showEmail: { type: Boolean, default: true }
     },
     gender: { type: String, enum: ['male', 'female', 'other'], default: 'other' },
+    phone: { type: String, default: '' },
     email: { type: String, default: '' },
     batteryStatus: { type: String, default: 'N/A' },
     lastSeen: { type: Date, default: Date.now },
@@ -65,15 +63,12 @@ const UserSchema = new mongoose.Schema({
             type: { type: String, enum: ['Point'], default: 'Point' },
             coordinates: { type: [Number] }
         },
-        expiresAt: { type: Date }
+        expiresAt: { type: Date } // إضافة حقل تاريخ انتهاء الصلاحية
     },
-    linkedMoazeb: {
+    linkedMoazeb: { // إضافة حقل لربط المضيف
         moazebId: { type: mongoose.Schema.Types.ObjectId, ref: 'Moazeb' },
         linkedAt: { type: Date }
-    },
-    verificationCode: String,
-    verificationCodeExpires: Date,
-    isVerified: { type: Boolean, default: false }
+    }
 }, { timestamps: true });
 
 UserSchema.index({ location: '2dsphere' });
@@ -145,18 +140,18 @@ const MoazebSchema = new mongoose.Schema({
         coordinates: { type: [Number], required: true }
     },
     createdBy: { type: String, required: true },
-    linkedUsers: [{ type: String }]
+    linkedUsers: [{ type: String }] // إضافة حقل للمستخدمين المرتبطين
 }, { timestamps: true });
 MoazebSchema.index({ location: '2dsphere' });
 const Moazeb = mongoose.model('Moazeb', MoazebSchema);
 
+// إعدادات Express
 app.use(express.static(path.join(__dirname, '../')));
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
 });
 
 const connectedUsers = {};
-let user; // To hold the authenticated user object for the socket session
 
 // وظيفة لحذف نقاط التجمع المنتهية
 async function cleanupExpiredMeetingPoints() {
@@ -172,144 +167,79 @@ async function cleanupExpiredMeetingPoints() {
         console.error('خطأ في حذف نقاط التجمع المنتهية:', error);
     }
 }
+
+// تشغيل المهمة كل ساعة
 setInterval(cleanupExpiredMeetingPoints, 3600000);
 
 // منطق Socket.IO
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     console.log(`📡 مستخدم جديد متصل: ${socket.id}`);
 
-    // --- New Authentication Flow ---
+    let user;
 
-    socket.on('auth:register', async ({ phone, password }) => {
+    socket.on('registerUser', async (data) => {
+        const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
+
         try {
-            const existingUser = await User.findOne({ phone });
-            if (existingUser) {
-                return socket.emit('auth:error', 'رقم الهاتف هذا مسجل بالفعل.');
-            }
+            user = await User.findOne({ userId: userId }).populate('createdPOIs').populate('linkedMoazeb.moazebId');
 
-            const hashedPassword = await bcrypt.hash(password, 12);
-            const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-            
-            const newUser = new User({
-                phone,
-                password: hashedPassword,
-                name: `زائر_${phone.slice(-4)}`,
-                userId: `user_${Math.random().toString(36).substring(2, 15)}`,
-                linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
-                verificationCode,
-                verificationCodeExpires: Date.now() + 3600000, // 1 hour
-                isVerified: false,
-            });
-
-            await newUser.save();
-
-            // *** SIMULATE SENDING SMS ***
-            // In a real application, you would use an SMS gateway like Twilio here.
-            console.log(`====== [SMS SIMULATION] ======`);
-            console.log(`رمز التحقق للمستخدم ${phone} هو: ${verificationCode}`);
-            console.log(`==============================`);
-            // ****************************
-
-            socket.emit('auth:show_verify', { phone });
-
-        } catch (error) {
-            console.error('Registration error:', error);
-            socket.emit('auth:error', 'حدث خطأ أثناء التسجيل.');
-        }
-    });
-
-    socket.on('auth:verify', async ({ phone, code }) => {
-        try {
-            const userToVerify = await User.findOne({
-                phone,
-                verificationCode: code,
-                verificationCodeExpires: { $gt: Date.now() }
-            });
-
-            if (!userToVerify) {
-                return socket.emit('auth:error', 'رمز التحقق غير صحيح أو منتهي الصلاحية.');
-            }
-
-            userToVerify.isVerified = true;
-            userToVerify.verificationCode = undefined;
-            userToVerify.verificationCodeExpires = undefined;
-            await userToVerify.save();
-
-            socket.emit('auth:login_success', userToVerify);
-
-        } catch (error) {
-            console.error('Verification error:', error);
-            socket.emit('auth:error', 'حدث خطأ أثناء التحقق.');
-        }
-    });
-
-    socket.on('auth:login', async ({ phone, password }) => {
-        try {
-            const userToLogin = await User.findOne({ phone }).populate('createdPOIs').populate({ path: 'linkedMoazeb.moazebId' });
-            if (!userToLogin) {
-                return socket.emit('auth:error', 'رقم الهاتف أو كلمة المرور غير صحيحة.');
-            }
-
-            const isMatch = await bcrypt.compare(password, userToLogin.password);
-            if (!isMatch) {
-                return socket.emit('auth:error', 'رقم الهاتف أو كلمة المرور غير صحيحة.');
-            }
-            
-            if (!userToLogin.isVerified) {
-                 // Resend verification for unverified accounts
-                const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-                userToLogin.verificationCode = verificationCode;
-                userToLogin.verificationCodeExpires = Date.now() + 3600000;
-                await userToLogin.save();
-                console.log(`====== [SMS SIMULATION] ======`);
-                console.log(`إعادة إرسال رمز التحقق للمستخدم ${phone} هو: ${verificationCode}`);
-                console.log(`==============================`);
-                socket.emit('auth:show_verify', { phone });
-                return socket.emit('auth:error', 'حسابك غير مفعل. تم إرسال رمز تحقق جديد.');
-            }
-
-
-            socket.emit('auth:login_success', userToLogin);
-
-        } catch (error) {
-            console.error('Login error:', error);
-            socket.emit('auth:error', 'حدث خطأ أثناء تسجيل الدخول.');
-        }
-    });
-
-    socket.on('user:initialize_session', async (data) => {
-        const { userId } = data;
-        try {
-            user = await User.findOne({ userId }).populate('createdPOIs').populate({ path: 'linkedMoazeb.moazebId' });
             if (!user) {
-                socket.emit('error', 'User not found for session initialization.');
-                return socket.disconnect(true);
+                user = new User({
+                    userId: userId,
+                    name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
+                    photo: photo || 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER',
+                    location: { type: 'Point', coordinates: [0, 0] },
+                    linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
+                    settings: {
+                        emergencyWhatsapp: emergencyWhatsapp || '',
+                        showPhone: true,
+                        showEmail: true
+                    },
+                    gender: gender || 'other',
+                    phone: phone || '',
+                    email: email || ''
+                });
+                await user.save();
+                console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
+            } else {
+                if (name && user.name !== name) user.name = name;
+                if (photo && user.photo !== photo) user.photo = photo;
+                if (gender && user.gender !== gender) user.gender = gender;
+                if (phone && user.phone !== phone) user.phone = phone;
+                if (email && user.email !== email) user.email = email;
+                if (emergencyWhatsapp !== undefined && user.settings.emergencyWhatsapp !== emergencyWhatsapp) {
+                    user.settings.emergencyWhatsapp = emergencyWhatsapp;
+                }
+                user.lastSeen = Date.now();
+                await user.save();
+                console.log(`👤 مستخدم موجود في DB، تم تحديثه: ${user.name} (${user.userId})`);
             }
 
             connectedUsers[user.userId] = socket.id;
             socket.userId = user.userId;
-            console.log(`✅ تم ربط الجلسة للمستخدم: ${user.name} (${user.userId})`);
 
-            // Send initial data to the newly connected user
-            socket.emit('user:session_initialized', user);
+            socket.emit('currentUserData', user);
 
             if (user.linkedFriends && user.linkedFriends.length > 0) {
                 const friendsData = await User.find({ userId: { $in: user.linkedFriends } });
                 socket.emit('updateFriendsList', friendsData);
             }
 
+            // إرسال بيانات المضيف المرتبط إذا كان موجوداً
             if (user.linkedMoazeb && user.linkedMoazeb.moazebId) {
                 socket.emit('moazebConnectionData', { 
                     moazeb: user.linkedMoazeb.moazebId,
+                    connectionLine: user.linkedMoazeb.connectionLine || []
                 });
             }
 
         } catch (error) {
-            console.error('❌ خطأ في تهيئة جلسة المستخدم:', error);
+            console.error('❌ خطأ في معالجة تسجيل المستخدم:', error);
+            socket.emit('registrationFailed', { message: 'فشل تسجيل المستخدم.' });
+            socket.disconnect(true);
+            return;
         }
     });
-    
-    // --- End of New Authentication Flow ---
 
     socket.on('updateLocation', async (data) => {
         if (!socket.userId || !data.location) return;
@@ -360,19 +290,23 @@ io.on('connection', (socket) => {
 
                     socket.emit('locationUpdate', locationData);
 
+                    // إذا كان المستخدم مرتبطاً بمضيف، تحديث خط الربط
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
-                            try {
-                                const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/walking/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`);
-                                const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
-                                socket.emit('moazebConnectionUpdate', {
-                                    moazebId: moazeb._id,
-                                    connectionLine: connectionLine
-                                });
-                            } catch (apiError) {
-                                console.error("Mapbox API error:", apiError.message);
-                            }
+                            // إنشاء خط مسار يعكس الطرق الفعلية
+                            const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
+                            const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
+                            
+                            await User.updateOne(
+                                { userId: updatedUser.userId },
+                                { 'linkedMoazeb.connectionLine': connectionLine }
+                            );
+                            
+                            socket.emit('moazebConnectionUpdate', {
+                                moazebId: moazeb._id,
+                                connectionLine: connectionLine
+                            });
                         }
                     }
                 } else {
@@ -462,19 +396,13 @@ io.on('connection', (socket) => {
     socket.on('updateSettings', async (data) => {
         if (!user) return;
         try {
-            // Merge settings
-            const settingsUpdate = { ...user.settings.toObject(), ...data.settings };
-            user.settings = settingsUpdate;
-            
-            // Update top-level fields
-            if (data.name !== undefined) user.name = data.name;
+            user.settings = { ...user.settings, ...data };
             if (data.gender !== undefined) user.gender = data.gender;
             if (data.phone !== undefined) user.phone = data.phone;
             if (data.email !== undefined) user.email = data.email;
 
             await user.save();
-            console.log(`⚙️ تم تحديث إعدادات ${user.name}`);
-            socket.emit('user:settings_updated', user);
+            console.log(`⚙️ تم تحديث إعدادات ${user.name}:`, user.settings);
 
             if (!user.settings.shareLocation || user.settings.stealthMode) {
                 io.emit('removeUserMarker', { userId: user.userId });
@@ -572,16 +500,15 @@ io.on('connection', (socket) => {
             });
             await newPOI.save();
             
-            const updatedUser = await User.findByIdAndUpdate(
+            await User.findByIdAndUpdate(
                 user._id,
                 { $push: { createdPOIs: newPOI._id } },
                 { new: true }
-            ).populate('createdPOIs');
+            );
 
-            user = updatedUser; // Update server-side user object
             socket.emit('poiStatus', { success: true, message: `✅ تم إضافة ${newPOI.name} بنجاح.` });
-            socket.emit('user:session_initialized', user); // Re-send full user data
-            io.emit('updatePOIs'); // Tell all clients to refresh POIs
+            io.emit('updatePOIs');
+            socket.emit('registerUser', { userId: user.userId });
 
         } catch (error) {
             console.error('❌ خطأ في إضافة POI:', error);
@@ -606,16 +533,15 @@ io.on('connection', (socket) => {
             }
 
             await CommunityPOI.findByIdAndDelete(poiId);
-            const updatedUser = await User.findByIdAndUpdate(
+            await User.findByIdAndUpdate(
                 user._id,
                 { $pull: { createdPOIs: poiId } },
                 { new: true }
-            ).populate('createdPOIs');
+            );
 
-            user = updatedUser; // Update server-side user object
             socket.emit('poiDeleted', { success: true, message: 'تم الحذف بنجاح.', poiId });
-            socket.emit('user:session_initialized', user); // Re-send full user data
-            io.emit('updatePOIs'); // Tell all clients to refresh POIs
+            io.emit('updatePOIs');
+            socket.emit('registerUser', { userId: user.userId });
 
         } catch (error) {
             console.error('❌ خطأ في حذف POI:', error);
@@ -651,6 +577,7 @@ io.on('connection', (socket) => {
     socket.on('setMeetingPoint', async (data) => {
         if (!user || !data.name || !data.location) return;
         try {
+            // تعيين تاريخ انتهاء بعد 24 ساعة
             const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
             
             user.meetingPoint = {
@@ -741,35 +668,37 @@ io.on('connection', (socket) => {
     socket.on('linkToMoazeb', async (data) => {
         const { moazebId } = data;
         if (!user || !moazebId) {
-            return socket.emit('linkToMoazebStatus', { success: false, message: 'بيانات ناقصة.' });
+            socket.emit('linkToMoazebStatus', { success: false, message: 'بيانات ناقصة.' });
+            return;
         }
 
         try {
             const moazeb = await Moazeb.findById(moazebId);
             if (!moazeb) {
-                return socket.emit('linkToMoazebStatus', { success: false, message: 'المضيف غير موجود.' });
+                socket.emit('linkToMoazebStatus', { success: false, message: 'المضيف غير موجود.' });
+                return;
             }
 
+            // إضافة المستخدم إلى قائمة المرتبطين بالمضيف
             if (!moazeb.linkedUsers.includes(user.userId)) {
                 moazeb.linkedUsers.push(user.userId);
                 await moazeb.save();
             }
 
+            // إنشاء خط مسار يعكس الطرق الفعلية
+            let connectionLine = [];
+            if (user.location && user.location.coordinates) {
+                const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
+                connectionLine = routeResponse.data.routes[0].geometry.coordinates;
+            }
+
+            // تحديث بيانات الربط للمستخدم
             user.linkedMoazeb = {
                 moazebId: moazeb._id,
-                linkedAt: new Date()
+                linkedAt: new Date(),
+                connectionLine: connectionLine
             };
             await user.save();
-
-            let connectionLine = [];
-            try {
-                if (user.location && user.location.coordinates && user.location.coordinates.length === 2) {
-                     const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/walking/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${process.env.MAPBOX_ACCESS_TOKEN}`);
-                     connectionLine = routeResponse.data.routes[0].geometry.coordinates;
-                }
-            } catch(apiError) {
-                console.error("Mapbox API error on linking:", apiError.message);
-            }
 
             socket.emit('linkToMoazebStatus', { 
                 success: true, 
@@ -778,6 +707,7 @@ io.on('connection', (socket) => {
                 connectionLine: connectionLine
             });
 
+            // إرسال بيانات الربط إلى العميل
             socket.emit('moazebConnectionData', { 
                 moazeb: moazeb,
                 connectionLine: connectionLine
@@ -797,6 +727,7 @@ io.on('connection', (socket) => {
             user.linkedMoazeb = undefined;
             await user.save();
 
+            // إزالة المستخدم من قائمة المرتبطين بالمضيف
             await Moazeb.findByIdAndUpdate(moazebId, {
                 $pull: { linkedUsers: user.userId }
             });
@@ -805,6 +736,8 @@ io.on('connection', (socket) => {
                 success: true, 
                 message: 'تم إلغاء الربط مع المضيف بنجاح.'
             });
+
+            // إرسال حدث لإزالة خط الربط من الخريطة
             socket.emit('moazebConnectionRemoved');
 
         } catch (error) {
@@ -843,12 +776,11 @@ io.on('connection', (socket) => {
         console.log(`👋 مستخدم قطع الاتصال: ${socket.id}`);
         if (socket.userId && connectedUsers[socket.userId]) {
             delete connectedUsers[socket.userId];
-            // To update last seen, we should set it on disconnect
-            User.findOneAndUpdate({ userId: socket.userId }, { lastSeen: new Date() }).exec();
         }
     });
 });
 
+// تشغيل الخادم
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 الخادم يعمل على المنفذ: ${PORT}`);
