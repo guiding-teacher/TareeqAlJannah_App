@@ -5,86 +5,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طريق الجنة - تحديد المواقع والمراسلة المخصص للعراق</title>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    <style>
-        .message-bubble {
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #007bff;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            white-space: nowrap;
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-            z-index: 10;
-        }
-        
-        .message-bubble.show {
-            opacity: 1;
-        }
-        
-        .moazeb-connection-line {
-            background-color: #FFA500;
-            width: 4px;
-            height: 100%;
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 5;
-        }
-    </style>
 </head>
 <body>
-    <header class="main-header">
-        <h1>طريق الجنة</h1>
-        
-        <nav>
-            <button id="showGeneralMapBtn" title="الخريطة العامة" class="active"><i class="fas fa-globe-americas"></i> الخريطة</button>
-            <button id="showFriendsMapBtn" title="خريطة الأصدقاء والربط"><i class="fas fa-handshake"></i> أصدقائي</button>
-            <button id="showProfileBtn" title="الملف الشخصي"><i class="fas fa-user"></i></button>
-            <button id="showConnectBtn" title="ربط حساب"><i class="fas fa-link"></i></button>
-            <button id="showMoazebBtn" title="المضيفين"><i class="fas fa-home"></i> المعزب</button>
-            <button id="showFeaturesBtn" title="ميزات إضافية"><i class="fas fa-bars"></i></button>
-            <button id="showSettingsBtn" title="الإعدادات والخصوصية"><i class="fas fa-cog"></i></button>
-            <button id="showAllMoazebBtn" title="عرض جميع المضيفين"><i class="fas fa-map-marked-alt"></i> عرض المعزب</button>
-            <button id="sosButton" class="sos-btn" style=" background-color: rgba(255, 20, 0, 0.93); text-align:center" title="زر الطوارئ"><i class="fas fa-exclamation-triangle"></i></button>
-        </nav>
-        
-    </header>
+    
+    <!-- Login/Register Overlay -->
+    <div id="auth-overlay">
+        <div class="auth-container">
+            <!-- Register Form -->
+            <div id="register-container">
+                <h2><i class="fas fa-user-plus"></i> تسجيل حساب جديد</h2>
+                <form id="register-form">
+                    <input type="text" id="registerNameInput" placeholder="الاسم الكامل" required>
+                    <input type="tel" id="registerPhoneInput" placeholder="رقم الهاتف (مثال: 07801234567)" required>
+                    <input type="password" id="registerPasswordInput" placeholder="كلمة المرور" required>
+                    <input type="password" id="registerConfirmPasswordInput" placeholder="تأكيد كلمة المرور" required>
+                    <button type="submit">تسجيل</button>
+                </form>
+                <button id="show-login-form" class="switch-form-btn">لديك حساب بالفعل؟ تسجيل الدخول</button>
+            </div>
 
-    <div id="map"></div>
+            <!-- Login Form -->
+            <div id="login-container">
+                <h2><i class="fas fa-sign-in-alt"></i> تسجيل الدخول</h2>
+                <form id="login-form">
+                    <input type="tel" id="loginPhoneInput" placeholder="رقم الهاتف" required>
+                    <input type="password" id="loginPasswordInput" placeholder="كلمة المرور" required>
+                    <button type="submit">دخول</button>
+                </form>
+                <button id="show-register-form" class="switch-form-btn">ليس لديك حساب؟ تسجيل جديد</button>
+            </div>
 
-    <div id="bottomChatBar" class="bottom-chat-bar">
-        <select id="bottomChatFriendSelect"></select>
-        <input type="text" id="bottomChatInput" placeholder="اكتب رسالتك هنا...">
-        <button id="bottomChatSendBtn"><i class="fas fa-paper-plane"></i></button>
-        <button id="toggleChatHistoryBtn" title="سجل الدردشة"><i class="fas fa-history"></i></button>
+            <!-- OTP Verification Form -->
+            <div id="otp-container" style="display:none;">
+                <h2><i class="fas fa-key"></i> التحقق من الرمز</h2>
+                <form id="otp-form">
+                    <p>تم إرسال رمز التحقق إلى هاتفك. الرجاء إدخاله أدناه.</p>
+                    <input type="hidden" id="otpPhoneInput">
+                    <input type="text" id="otpCodeInput" placeholder="رمز التحقق (6 أرقام)" required>
+                    <button type="submit">تحقق</button>
+                </form>
+            </div>
+        </div>
     </div>
+
+    <!-- Main Application Content -->
+    <div id="main-content" style="display: none;">
+        <header class="main-header">
+            <h1>طريق الجنة</h1>
+            <nav>
+                <button id="showGeneralMapBtn" title="الخريطة العامة" class="active"><i class="fas fa-globe-americas"></i> الخريطة</button>
+                <button id="showFriendsMapBtn" title="خريطة الأصدقاء والربط"><i class="fas fa-handshake"></i> أصدقائي</button>
+                <button id="showProfileBtn" title="الملف الشخصي"><i class="fas fa-user"></i></button>
+                <button id="showConnectBtn" title="ربط حساب"><i class="fas fa-link"></i></button>
+                <button id="showMoazebBtn" title="المضيفين"><i class="fas fa-home"></i> المعزب</button>
+                <button id="showFeaturesBtn" title="ميزات إضافية"><i class="fas fa-bars"></i></button>
+                <button id="showSettingsBtn" title="الإعدادات والخصوصية"><i class="fas fa-cog"></i></button>
+                <button id="showAllMoazebBtn" title="عرض جميع المضيفين"><i class="fas fa-map-marked-alt"></i> عرض المعزب</button>
+                <button id="sosButton" class="sos-btn" title="زر الطوارئ"><i class="fas fa-exclamation-triangle"></i></button>
+            </nav>
+        </header>
+        
+        <div id="map-container">
+            <div id="map"></div>
+            <div id="map-controls">
+                <label for="mapPitch">الميل</label>
+                <input type="range" id="mapPitch" min="0" max="80" value="45">
+                <label for="mapBearing">الدوران</label>
+                <input type="range" id="mapBearing" min="-180" max="180" value="-17.6">
+            </div>
+        </div>
+
+
+        <div id="bottomChatBar" class="bottom-chat-bar">
+            <select id="bottomChatFriendSelect"></select>
+            <input type="text" id="bottomChatInput" placeholder="اكتب رسالتك هنا...">
+            <button id="bottomChatSendBtn"><i class="fas fa-paper-plane"></i></button>
+            <button id="toggleChatHistoryBtn" title="سجل الدردشة"><i class="fas fa-history"></i></button>
+        </div>
+    </div>
+
 
     <!-- لوحة المعلومات الأولية -->
     <div class="overlay-panel" id="initialInfoPanel">
-        <h2><i class="fas fa-info-circle"></i> معلوماتك الشخصية</h2>
-        <p>الرجاء إدخال معلوماتك لإنشاء ملفك الشخصي.</p>
-        <input type="text" id="initialInfoNameInput" placeholder="اسمك">
+        <h2><i class="fas fa-info-circle"></i> استكمال معلوماتك الشخصية</h2>
+        <p>مرحباً بك <strong id="initialInfoNameDisplay"></strong>، برقم الهاتف <strong id="initialInfoPhoneDisplay"></strong>. الرجاء استكمال المعلومات التالية:</p>
         <select id="initialInfoGenderSelect">
-            <option value="other">الجنس</option>
+            <option value="other">اختر الجنس</option>
             <option value="male">ذكر</option>
             <option value="female">أنثى</option>
         </select>
-        <input type="tel" id="initialInfoPhoneInput" placeholder="رقم هاتفك">
         <input type="email" id="initialInfoEmailInput" placeholder="بريدك الإلكتروني" required>
-        <button id="initialInfoConfirmBtn"><i class="fas fa-check-circle"></i> تأكيد</button>
+        <input type="tel" id="initialInfoEmergencyWhatsappInput" placeholder="رقم واتساب للطوارئ (اختياري)">
+        <button id="initialInfoConfirmBtn"><i class="fas fa-check-circle"></i> تأكيد وحفظ</button>
     </div>
 
     <!-- لوحة الملف الشخصي -->
@@ -92,9 +106,9 @@
         <h2><i class="fas fa-user-circle"></i> ملفي الشخصي</h2>
         <div class="profile-info">
             <img id="userPhoto" src="https://j.top4top.io/p_3502b9jcc1.png" alt="صورة المستخدم">
-            <p><strong>الاسم:</strong> <span id="userName">اسم المستخدم</span></p>
-            <p><strong>رمز الربط:</strong> <span id="userLinkCode">ABCD123</span> <button id="copyLinkCodeBtn" style="width: auto; padding: 5px 10px; margin-right: 5px;"><i class="fas fa-copy"></i> نسخ</button></p>
-            <button id="generateCodeBtn"><i class="fas fa-sync-alt"></i> توليد رمز جديد</button>
+            <p><strong>الاسم:</strong> <span id="userName"></span></p>
+            <p><strong>رمز الربط:</strong> <span id="userLinkCode"></span> <button id="copyLinkCodeBtn" style="width: auto; padding: 5px 10px; margin-right: 5px;"><i class="fas fa-copy"></i></button></p>
+            <button id="generateCodeBtn" disabled><i class="fas fa-sync-alt"></i> توليد رمز جديد</button>
             <div class="feature-section" style="margin-top: 20px;">
                 <h3><i class="fas fa-user-edit"></i> تعديل معلوماتك</h3>
                 <input type="text" id="editUserNameInput" placeholder="اسمك الجديد">
@@ -103,7 +117,6 @@
                     <option value="male">ذكر</option>
                     <option value="female">أنثى</option>
                 </select>
-                <input type="tel" id="editPhoneInput" placeholder="رقم هاتفك">
                 <input type="email" id="editEmailInput" placeholder="بريدك الإلكتروني" required>
                 <button id="updateProfileInfoBtn"><i class="fas fa-save"></i> حفظ التغييرات</button>
             </div>
@@ -111,113 +124,77 @@
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة ربط الحسابات -->
+    <!-- Panels: Connect, Chat, Features, Moazeb, Settings -->
     <div class="overlay-panel" id="connectPanel">
         <h2><i class="fas fa-user-friends"></i> ربط حساب آخر</h2>
         <input type="text" id="friendCodeInput" placeholder="أدخل رمز الربط الخاص بالصديق">
         <button id="connectFriendBtn"><i class="fas fa-plus-circle"></i> ربط</button>
-        <div id="linkedFriendsList">
-            <h3><i class="fas fa-users"></i> الأصدقاء المرتبطون:</h3>
-            <ul id="friendsList"></ul>
-        </div>
-        <div class="feature-section" style="margin-top: 20px;">
-            <h3><i class="fas fa-users-cog"></i> إدارة المجموعات</h3>
-            <p class="feature-info">ميزة لربط مجموعة من الأصدقاء معاً. (قيد التطوير).</p>
-            <button disabled><i class="fas fa-plus"></i> إنشاء مجموعة</button>
-            <button disabled><i class="fas fa-link"></i> ربط بمجموعة</button>
-        </div>
+        <h3><i class="fas fa-users"></i> الأصدقاء المرتبطون:</h3>
+        <ul id="friendsList" style="list-style: none; padding: 0;"></ul>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة المراسلة (سجل الدردشة) -->
     <div class="overlay-panel" id="chatPanel">
         <h2><i class="fas fa-comment-alt"></i> سجل المراسلات</h2>
-        <div class="chat-header" style="margin-bottom: 10px;">
-            <label for="chatFriendSelect" style="display: block; margin-bottom: 5px; color: #555;">الدردشة مع:</label>
-            <select id="chatFriendSelect" style="width: 100%; padding: 8px; border-radius: 5px; border: 1px solid #ddd;"></select>
-        </div>
+        <select id="chatFriendSelect" style="width: 100%; padding: 8px;"></select>
         <div id="chatMessages"></div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة الميزات الإضافية -->
     <div class="overlay-panel" id="featuresPanel">
         <h2><i class="fas fa-cogs"></i> ميزات إضافية</h2>
         <div class="feature-section">
             <h3><i class="fas fa-route"></i> تتبع المسار التاريخي</h3>
-            <p class="feature-info">عرض مسار تنقل الأصدقاء في الماضي.</p>
-            <label for="historicalPathUserSelect">اختر المستخدم:</label>
             <select id="historicalPathUserSelect"></select>
             <button id="viewHistoricalPathBtn"><i class="fas fa-calendar-alt"></i> عرض السجل</button>
-            <button id="clearHistoricalPathBtn"><i class="fas fa-eraser"></i> مسح المسار</button>
+            <button id="clearHistoricalPathBtn" class="danger-btn"><i class="fas fa-eraser"></i> مسح المسار</button>
         </div>
         <div class="feature-section">
             <h3><i class="fas fa-handshake"></i> وضع التجمع</h3>
-            <p class="feature-info">حدد نقطة على الخريطة لتظهر لأصدقائك فقط.</p>
             <input type="text" id="meetingPointInput" placeholder="اسم نقطة التجمع">
-            <button id="setMeetingPointBtn"><i class="fas fa-crosshairs"></i> تحديد النقطة الحالية كنقطة تجمع</button>
-            <button id="endMeetingPointBtn" class="danger-btn" style="display: none;"><i class="fas fa-times-circle"></i> إنهاء نقطة التجمع</button>
+            <button id="setMeetingPointBtn"><i class="fas fa-crosshairs"></i> تحديد كنقطة تجمع</button>
+            <button id="endMeetingPointBtn" class="danger-btn" style="display: none;"><i class="fas fa-times-circle"></i> إنهاء</button>
         </div>
         <div class="feature-section">
-            <h3><i class="fas fa-map-marker-alt"></i> نقاط الاهتمام المجتمعية (POIs)</h3>
-            <p class="feature-info">إضافة ومشاركة مواقع مهمة (استراحات، إلخ).</p>
-            <label for="poiCategorySelect">اختر الفئة:</label>
+            <h3><i class="fas fa-map-marker-alt"></i> نقاط الاهتمام المجتمعية</h3>
             <select id="poiCategorySelect"></select>
-            <button id="addPoiBtn"><i class="fas fa-plus"></i> إضافة نقطة اهتمام في موقعي</button>
-            <div id="myPOIsList" style="margin-top: 10px; max-height: 150px; overflow-y: auto;">
-                <h4>نقاط الاهتمام التي أنشأتها:</h4>
-                <ul id="userPOIsList"></ul>
-            </div>
+            <button id="addPoiBtn"><i class="fas fa-plus"></i> إضافة نقطة في موقعي</button>
+            <h4>نقاطي:</h4>
+            <ul id="userPOIsList"></ul>
         </div>
         <div class="feature-section">
-            <h3><i class="fas fa-mosque"></i> أوقات الصلاة (لمدينة كربلاء)</h3>
-            <div id="prayerTimesDisplay">جاري التحميل...</div>
+            <h3><i class="fas fa-mosque"></i> أوقات الصلاة (لكربلاء)</h3>
+            <div id="prayerTimesDisplay">...</div>
             <button id="refreshPrayerTimesBtn"><i class="fas fa-redo"></i> تحديث</button>
         </div>
         <div class="feature-section">
-            <h3><i class="fas fa-globe-africa"></i> التحكم بـ 3D الخريطة</h3>
-            <div style="display: flex; flex-direction: column; gap: 5px;">
-                <label for="mapPitch">الميل (Pitch):</label>
-                <input type="range" id="mapPitch" min="0" max="80" value="45">
-                <label for="mapBearing">الدوران (Bearing):</label>
-                <input type="range" id="mapBearing" min="-180" max="180" value="-17.6">
-            </div>
-        </div>
-        <div class="feature-section" style="margin-top: 20px; text-align: right;">
             <h3><i class="fas fa-drafting-compass"></i> إضافاتي على الخريطة</h3>
-            <div id="myCreationsList" style="max-height: 150px; overflow-y: auto; padding-right: 10px;">
-                <p class="feature-info">قائمة نقاط الاهتمام ونقاط التجمع التي أنشأتها...</p>
-            </div>
+            <div id="myCreationsList"></div>
         </div>
         <div class="feature-section">
-            <h3><i class="fas fa-battery-full"></i> حالة البطارية (الأصدقاء)</h3>
+            <h3><i class="fas fa-battery-full"></i> حالة بطارية الأصدقاء</h3>
             <ul id="friendBatteryStatus"></ul>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة المعزب -->
     <div class="overlay-panel" id="moazebPanel">
         <h2><i class="fas fa-home"></i> قسم المضيفين (المعزب)</h2>
         <div class="feature-section">
             <h3><i class="fas fa-search"></i> البحث عن مضيف</h3>
-                        <h5><i class="fas fa-search"></i> قم بالبحث عن معزب برقم هاتف او المحافظة او القضاء</h5>
-            <div class="search-form">
-                <input type="text" id="searchMoazebPhone" placeholder="رقم الهاتف (مثال: 0780xxxxxxx)">
+            <div class="search-form" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <input type="text" id="searchMoazebPhone" placeholder="رقم الهاتف">
                 <input type="text" id="searchMoazebGov" placeholder="المحافظة">
                 <input type="text" id="searchMoazebDist" placeholder="القضاء">
-                <button id="searchMoazebBtn"><i class="fas fa-search"></i> بحث</button>
+                <button id="searchMoazebBtn" style="grid-column: 1 / -1;"><i class="fas fa-search"></i> بحث</button>
             </div>
-            <div id="moazebResultsContainer">
-                <p class="feature-info">نتائج البحث ستظهر هنا...</p>
-            </div>
+            <div id="moazebResultsContainer"></div>
         </div>
         <div class="feature-section">
-            <h3><i class="fas fa-user-plus"></i> إضافة مضيف جديد (في موقعك الحالي)</h3>
-            <p class="feature-info">ساعد الآخرين بإضافة معلومات مضيف جديد. سيتم تسجيله في موقعك الحالي على الخريطة.</p>
-            <input type="text" id="addMoazebName" placeholder="الاسم الكامل للمضيف">
-            <input type="text" id="addMoazebAddress" placeholder="العنوان التفصيلي (أقرب نقطة دالة)">
-            <input type="tel" id="addMoazebPhone" placeholder="رقم الهاتف (يبدأ بـ 07)">
+            <h3><i class="fas fa-user-plus"></i> إضافة مضيف جديد</h3>
+            <input type="text" id="addMoazebName" placeholder="الاسم الكامل">
+            <input type="text" id="addMoazebAddress" placeholder="العنوان التفصيلي">
+            <input type="tel" id="addMoazebPhone" placeholder="رقم الهاتف (07xxxxxxxxx)">
             <input type="text" id="addMoazebGov" placeholder="المحافظة">
             <input type="text" id="addMoazebDist" placeholder="القضاء/الناحية">
             <select id="addMoazebType">
@@ -229,69 +206,48 @@
                 <option value="sleep">مكان نوم</option>
                 <option value="food">مكان طعام</option>
             </select>
-            <button id="addMoazebBtn"><i class="fas fa-plus-circle"></i> إضافة المضيف</button>
+            <button id="addMoazebBtn"><i class="fas fa-plus-circle"></i> إضافة</button>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <!-- لوحة الإعدادات والخصوصية -->
     <div class="overlay-panel" id="settingsPanel">
         <h2><i class="fas fa-sliders-h"></i> الإعدادات والخصوصية</h2>
         <div class="feature-section">
-            <h3><i class="fas fa-phone-alt"></i> رقم الواتساب للطوارئ</h3>
-            <input type="tel" id="emergencyWhatsappInput" placeholder="رقم واتساب (مثال: 9647xxxxxxxxx)">
-            <button id="updateEmergencyWhatsappBtn"><i class="fas fa-save"></i> حفظ الرقم</button>
+            <h3><i class="fas fa-phone-alt"></i> رقم واتساب للطوارئ</h3>
+            <input type="tel" id="emergencyWhatsappInput" placeholder="مثال: 9647xxxxxxxxx">
+            <button id="updateEmergencyWhatsappBtn"><i class="fas fa-save"></i> حفظ</button>
         </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-location-arrow"></i> مشاركة الموقع</h3>
-            <label class="switch">
-                <input type="checkbox" id="shareLocationToggle" checked>
-                <span class="slider round"></span>
-            </label>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+            <label>مشاركة الموقع</label>
+            <label class="switch"><input type="checkbox" id="shareLocationToggle" checked><span class="slider"></span></label>
         </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-volume-up"></i> إعدادات الصوت</h3>
-            <label class="switch">
-                <input type="checkbox" id="soundToggle" checked>
-                <span class="slider round"></span>
-            </label>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+            <label>تفعيل الصوت</label>
+            <label class="switch"><input type="checkbox" id="soundToggle" checked><span class="slider"></span></label>
         </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-eye-slash"></i> إخفاء فقاعات الرسائل</h3>
-            <label class="switch">
-                <input type="checkbox" id="hideBubblesToggle">
-                <span class="slider round"></span>
-            </label>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+            <label>إخفاء فقاعات الرسائل</label>
+            <label class="switch"><input type="checkbox" id="hideBubblesToggle"><span class="slider"></span></label>
         </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-user-secret"></i> وضع التخفي</h3>
-            <label class="switch">
-                <input type="checkbox" id="stealthModeToggle">
-                <span class="slider round"></span>
-            </label>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+            <label>وضع التخفي</label>
+            <label class="switch"><input type="checkbox" id="stealthModeToggle"><span class="slider"></span></label>
         </div>
-        <div class="feature-section">
-            <h3><i class="fas fa-user-shield"></i> إعدادات الخصوصية</h3>
-            <div style="display: flex; justify-content: space-between;">
-                <label>إظهار رقم الهاتف:</label>
-                <label class="switch">
-                    <input type="checkbox" id="showPhoneToggle" checked>
-                    <span class="slider round"></span>
-                </label>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-                <label>إظهار البريد الإلكتروني:</label>
-                <label class="switch">
-                    <input type="checkbox" id="showEmailToggle" checked>
-                    <span class="slider round"></span>
-                </label>
-            </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+            <label>إظهار رقم الهاتف للأصدقاء</label>
+            <label class="switch"><input type="checkbox" id="showPhoneToggle" checked><span class="slider"></span></label>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+            <label>إظهار البريد الإلكتروني للأصدقاء</label>
+            <label class="switch"><input type="checkbox" id="showEmailToggle" checked><span class="slider"></span></label>
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
