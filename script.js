@@ -94,7 +94,8 @@ function createCustomMarker(user) {
         el.classList.add('stealth-mode');
     }
 
-    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'image/Picsart_25-08-03_16-47-02-591.png';
+    // *** تعديل: تغيير الصورة الافتراضية إلى صورة حسينية (image/husseini_avatar.png) ***
+    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'image/husseini_avatar.png';
 
     el.innerHTML = `
         <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}">
@@ -1185,6 +1186,9 @@ socket.on('moazebSearchResults', (data) => {
 
             card.querySelector('.locate-moazeb-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
+                // *** تعديل: إغلاق اللوحة بعد تحديد الموقع ***
+                togglePanel(null);
+                document.getElementById('showGeneralMapBtn').classList.add('active');
                 map.flyTo({
                     center: moazeb.location.coordinates,
                     zoom: 15,
