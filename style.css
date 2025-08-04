@@ -19,6 +19,92 @@ body {
     color: var(--text-color);
     background-color: var(--bg-color);
     overflow: hidden;
+    height: 100vh;
+}
+
+/* Auth Overlay Styles */
+#auth-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('https://i.imgur.com/gKkIS3H.jpg'); /* Blurry Karbala Background */
+    background-size: cover;
+    background-position: center;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#auth-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+}
+
+.auth-container {
+    position: relative;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 30px;
+    border-radius: var(--border-radius);
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    direction: rtl;
+    box-shadow: var(--shadow);
+}
+
+.auth-container h2 {
+    color: var(--primary-color);
+}
+
+.auth-container input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: var(--border-radius);
+    box-sizing: border-box;
+    font-family: 'Cairo', sans-serif;
+}
+
+.auth-container button {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: background-color 0.3s;
+}
+.auth-container button:hover {
+    background-color: #0056b3;
+}
+.auth-container .switch-form-btn {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: pointer;
+    margin-top: 15px;
+    text-decoration: underline;
+}
+
+#login-container, #otp-form {
+    display: none;
+}
+
+
+/* Main App Styles */
+#main-content {
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -35,7 +121,6 @@ body {
     z-index: 10;
     position: relative;
     direction: rtl;
-    unicode-bidi: embed;
 }
 
 .main-header h1 {
@@ -45,7 +130,7 @@ body {
 }
 
 .main-header nav button {
-    font-family:sans-serif;
+    font-family: 'Cairo', sans-serif;
     background-color: transparent;
     color: white;
     border: 2px solid white;
@@ -54,12 +139,10 @@ body {
     border-radius: var(--border-radius);
     cursor: pointer;
     font-size: 1em;
-    transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+    transition: all 0.3s ease;
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    direction: rtl;
-    unicode-bidi: embed;
 }
 
 .main-header nav button:hover {
@@ -74,31 +157,10 @@ body {
     box-shadow: 0 0 10px rgba(40, 167, 69, 0.4);
 }
 
-.main-header nav button.active:hover {
-    background-color: #218838;
-}
-
 .sos-btn {
-    background-color: rgb(240, 13, 13);
-    color: white;
-    border: 2px solid #c82333;
-    padding: 12px 20px;
-    border-radius: 50px;
-    font-size: 1.1em;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-    display: flex;
-    align-items: center;
+    background-color: var(--danger-color);
+    border-color: #c82333;
     animation: sosPulse 1.5s infinite alternate;
-    direction: rtl;
-    unicode-bidi: embed;
-    text-align: center;
-}
-
-.sos-btn:hover {
-    background-color: #c82333;
-    transform: scale(1.05);
 }
 
 @keyframes sosPulse {
@@ -106,13 +168,38 @@ body {
     to { box-shadow: 0 0 10px rgba(220, 53, 69, 0.7), 0 0 20px rgba(220, 53, 69, 0.5); }
 }
 
-#map {
+#map-container {
     flex-grow: 1;
-    width: 100%;
-    height: calc(100vh - 70px);
     position: relative;
-    z-index: 1;
 }
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
+/* On-map 3D Controls */
+#map-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px;
+    border-radius: 8px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    direction: ltr;
+}
+#map-controls label {
+    font-size: 0.8em;
+    color: #333;
+}
+#map-controls input[type="range"] {
+    width: 120px;
+}
+
 
 .overlay-panel {
     position: absolute;
@@ -135,16 +222,10 @@ body {
     overflow-y: auto;
     max-height: 90vh;
     direction: rtl;
-    unicode-bidi: embed;
 }
 
 .overlay-panel.active {
     display: flex;
-}
-
-#initialInfoPanel.active {
-    display: flex;
-    z-index: 100;
 }
 
 @keyframes fadeIn {
@@ -163,26 +244,21 @@ body {
     font-size: 1.8em;
 }
 
-.overlay-panel input[type="text"],
-.overlay-panel input[type="tel"],
-.overlay-panel input[type="email"],
-.overlay-panel select,
-.overlay-panel button {
+.overlay-panel input, .overlay-panel select, .overlay-panel button {
     width: 100%;
     padding: 14px;
     border-radius: var(--border-radius);
     border: 1px solid #ccc;
     font-size: 1.1em;
     box-sizing: border-box;
-    direction: rtl;
-    unicode-bidi: embed;
+    font-family: 'Cairo', sans-serif;
 }
 
 .overlay-panel button {
     background-color: var(--primary-color);
     color: white;
     cursor: pointer;
-    transition: background-color 0.3s ease, transform 0.2s ease;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -194,22 +270,10 @@ body {
     transform: translateY(-2px);
 }
 
-.overlay-panel .close-btn {
-    background-color: var(--secondary-color);
-    margin-top: 25px;
-}
-.overlay-panel .close-btn:hover {
-    background-color: #5a6268;
-}
-
-.overlay-panel .danger-btn {
-    background-color: var(--danger-color);
-}
-.overlay-panel .danger-btn:hover {
-    background-color: #c82333;
-}
-
-.profile-info { text-align: center; }
+.overlay-panel .close-btn { background-color: var(--secondary-color); }
+.overlay-panel .close-btn:hover { background-color: #5a6268; }
+.overlay-panel .danger-btn { background-color: var(--danger-color); }
+.overlay-panel .danger-btn:hover { background-color: #c82333; }
 
 #userPhoto {
     width: 120px;
@@ -218,19 +282,7 @@ body {
     object-fit: cover;
     margin-bottom: 20px;
     border: 4px solid var(--accent-color);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
-
-#linkedFriendsList ul { list-style: none; padding: 0; margin: 0; }
-#linkedFriendsList li {
-    padding: 10px 0;
-    border-bottom: 1px dashed #eee;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 1.1em;
-}
-#linkedFriendsList li:last-child { border-bottom: none; }
 
 #chatMessages {
     height: 250px;
@@ -238,9 +290,6 @@ body {
     border-radius: var(--border-radius);
     padding: 15px;
     overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
     background-color: #f0f2f5;
 }
 
@@ -250,19 +299,14 @@ body {
     border-radius: 20px;
     max-width: 75%;
     align-self: flex-start;
-    font-size: 0.95em;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    direction: rtl;
-    unicode-bidi: embed;
-    text-align: right;
     word-break: break-word;
+    text-align: right;
 }
 .message.sent {
     background-color: var(--primary-color);
     color: white;
     align-self: flex-end;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    text-align: right;
 }
 .message-meta {
     font-size: 0.8em;
@@ -282,31 +326,23 @@ body {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 5;
 }
-
 .user-marker-photo {
     width: 60px;
     height: 60px;
     border-radius: 50%;
     object-fit: cover;
-    box-shadow: var(--shadow);
     animation: pulse 1.5s infinite alternate;
 }
 .current-user-marker .user-marker-photo { border: 4px solid var(--accent-color); }
 .friend-marker .user-marker-photo { border: 4px solid var(--primary-color); }
-
 .user-marker-name {
     background-color: rgba(0, 0, 0, 0.75);
     color: white;
     padding: 6px 10px;
     border-radius: 6px;
-    font-size: 0.9em;
     margin-top: 8px;
     white-space: nowrap;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-    direction: rtl;
-    unicode-bidi: embed;
 }
 
 .message-bubble {
@@ -316,7 +352,6 @@ body {
     color: white;
     padding: 10px 15px;
     border-radius: 25px;
-    font-size: 1em;
     white-space: nowrap;
     opacity: 0;
     transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
@@ -324,9 +359,6 @@ body {
     transform: translateX(-50%) translateY(10px);
     left: 50%;
     z-index: 30;
-    box-shadow: var(--shadow);
-    direction: rtl;
-    unicode-bidi: embed;
 }
 .message-bubble.show {
     opacity: 1;
@@ -338,39 +370,23 @@ body {
     to { transform: scale(1.1); box-shadow: 0 0 10px 5px rgba(40, 167, 69, 0); }
 }
 
-.poi-marker {
+.poi-marker, .meeting-point-marker, .moazeb-marker {
     width: 35px;
     height: 35px;
-    background-color: #FFC107;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #333;
     font-size: 1.2em;
-    border: 2px solid #e0a800;
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     cursor: pointer;
     transition: transform 0.2s ease;
 }
-.poi-marker:hover { transform: scale(1.1); }
+.poi-marker { background-color: #FFC107; color: #333; border: 2px solid #e0a800; }
+.meeting-point-marker { background-color: #17a2b8; color: white; border: 3px solid #138496; width: 45px; height: 45px; font-size: 1.8em; }
+.moazeb-marker { background-color: #006400; color: white; border: 2px solid white; }
+.poi-marker:hover, .meeting-point-marker:hover, .moazeb-marker:hover { transform: scale(1.1); }
 
-.meeting-point-marker {
-    width: 45px;
-    height: 45px;
-    background-color: #17a2b8;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.8em;
-    border: 3px solid #138496;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-.meeting-point-marker:hover { transform: scale(1.1); }
 
 .feature-section {
     background-color: #f2f4f6;
@@ -378,28 +394,18 @@ body {
     border-radius: var(--border-radius);
     border: 1px solid #e0e0e0;
     margin-bottom: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
 }
 .feature-section h3 {
     color: var(--primary-color);
-    margin: 0;
+    margin: 0 0 10px 0;
     font-size: 1.3em;
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
-.feature-info { font-size: 0.9em; color: #555; margin: 0; }
-.feature-section button:disabled { background-color: var(--secondary-color); cursor: not-allowed; opacity: 0.7; }
-.feature-section button:disabled:hover { background-color: var(--secondary-color); transform: none; }
 
 .switch { position: relative; display: inline-block; width: 60px; height: 34px; align-self: flex-end; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
 .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
 input:checked + .slider { background-color: var(--accent-color); }
-input:focus + .slider { box-shadow: 0 0 1px var(--accent-color); }
 input:checked + .slider:before { transform: translateX(26px); }
 
 .bottom-chat-bar {
@@ -415,25 +421,21 @@ input:checked + .slider:before { transform: translateX(26px); }
     gap: 10px;
     z-index: 15;
     direction: rtl;
-    unicode-bidi: embed;
     transform: translateY(100%);
     transition: transform 0.3s ease-in-out;
 }
 .bottom-chat-bar.active { transform: translateY(0); }
-#bottomChatFriendSelect { flex-basis: 150px; padding: 8px; border-radius: var(--border-radius); border: 1px solid #ccc; font-size: 0.9em; }
-#bottomChatInput { flex-grow: 1; padding: 8px 12px; border-radius: var(--border-radius); border: 1px solid #ccc; font-size: 0.9em; }
-#bottomChatSendBtn, #toggleChatHistoryBtn { background-color: var(--primary-color); color: white; border: none; border-radius: var(--border-radius); padding: 8px 15px; cursor: pointer; font-size: 1.1em; }
+#bottomChatFriendSelect { flex-basis: 150px; }
+#bottomChatInput { flex-grow: 1; }
+#bottomChatSendBtn, #toggleChatHistoryBtn { background-color: var(--primary-color); color: white; border: none; padding: 8px 15px; cursor: pointer; }
 #toggleChatHistoryBtn { background-color: var(--secondary-color); }
 
-.search-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.search-form button { grid-column: 1 / -1; }
 #moazebResultsContainer {
     max-height: 200px;
     overflow-y: auto;
     border: 1px solid #ddd;
     border-radius: var(--border-radius);
     padding: 10px;
-    background-color: white;
 }
 .moazeb-card {
     background-color: #f9f9f9;
@@ -442,45 +444,11 @@ input:checked + .slider:before { transform: translateX(26px); }
     margin-bottom: 10px;
     border-right: 5px solid var(--accent-color);
 }
-.moazeb-card h4 { margin: 0 0 10px 0; color: var(--primary-color); }
-.moazeb-card p { margin: 5px 0; font-size: 0.95em; color: #555; }
-.moazeb-card p i { margin-left: 8px; color: var(--secondary-color); }
-
-
-
-.moazeb-marker {
-    background-color: #006400; /* أخضر داكن */
-    color: white;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    border: 2px solid white;
-}
-
-.moazeb-marker i {
-    font-size: 14px;
-}
-
-
 
 @media (max-width: 768px) {
-    .main-header { flex-direction: column; gap: 0px; padding: 5px; }
+    .main-header { flex-direction: column; gap: 5px; padding: 10px; }
     .main-header h1 { font-size: 1.5em; }
     .main-header nav { display: flex; flex-wrap: wrap; justify-content: center; }
-    .main-header nav button { margin: 5px; padding: 5px 5px; font-size: 0.8em; }
-    .sos-btn { text-align: center; color: rgba(255, 20, 0, 0.93); position: static; margin-top: 1px; width: 11%; padding: 10px; }
-    .overlay-panel { min-width: unset;  width: 95%; padding: 20px; gap: 15px; }
-    .overlay-panel h2 { font-size: 1.5em; }
-    .overlay-panel input, .overlay-panel select, .overlay-panel button { padding: 10px; font-size: 1em; }
-    #userPhoto { width: 90px; height: 90px; }
-    #chatMessages { height: 200px; }
-    .feature-section { padding: 10px; gap: 8px; }
-    .feature-section h3 { font-size: 1.1em; }
-    .bottom-chat-bar { padding: 5px; gap: 5px; }
-    #bottomChatFriendSelect, #bottomChatInput, #bottomChatSendBtn, #toggleChatHistoryBtn { font-size: 0.8em; padding: 6px; }
-    .search-form { grid-template-columns: 1fr; }
+    .main-header nav button { margin: 3px; padding: 6px 8px; font-size: 0.8em; }
+    .overlay-panel { min-width: unset;  width: 95%; padding: 20px; }
 }
