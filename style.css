@@ -283,7 +283,6 @@ body {
     justify-content: center;
     cursor: pointer;
     z-index: 5;
-    position: relative; /* Needed for bubbles */
 }
 
 .user-marker-photo {
@@ -333,28 +332,6 @@ body {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
-
-/* *** تعديل: إضافة تنسيقات فقاعة الحالة *** */
-.status-bubble {
-    position: absolute;
-    top: calc(100% + 28px); /* Position below the name */
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: var(--accent-color);
-    color: white;
-    padding: 5px 12px;
-    border-radius: 15px;
-    font-size: 13px;
-    white-space: nowrap;
-    z-index: 11;
-    display: none; /* Hidden by default */
-    align-items: center;
-    gap: 5px;
-}
-.status-bubble.show {
-    display: inline-flex;
-}
-
 
 @keyframes pulse {
     from { transform: scale(1); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
@@ -468,16 +445,12 @@ input:checked + .slider:before { transform: translateX(26px); }
 .moazeb-card h4 { margin: 0 0 10px 0; color: var(--primary-color); }
 .moazeb-card p { margin: 5px 0; font-size: 0.95em; color: #555; }
 .moazeb-card p i { margin-left: 8px; color: var(--secondary-color); }
-/* *** تعديل: إضافة تنسيقات لزر تحديد الموقع *** */
-.moazeb-card .card-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
+/* *** تعديل: إضافة هامش للأزرار داخل بطاقة المضيف *** */
 .moazeb-card button {
+    margin-top: 5px;
+    margin-left: 5px;
     width: auto;
-    flex-grow: 1;
-    padding: 8px;
+    padding: 8px 12px;
     font-size: 0.9em;
 }
 
@@ -520,51 +493,14 @@ input:checked + .slider:before { transform: translateX(26px); }
     box-shadow: var(--shadow);
     border: 1px solid #ddd;
     font-size: 1.2em;
-    color: var(--text-color);
 }
 .map-control-btn:hover {
     background-color: #f0f0f0;
 }
 
-/* *** تعديل: إضافة تنسيقات زر الحالة الجديد *** */
-.status-controls {
-    position: absolute;
-    top: 220px; /* Position below other controls */
-    right: 10px;
-    z-index: 10;
+.moazeb-marker i {
+    font-size: 14px;
 }
-#statusBtn.active {
-    background-color: var(--accent-color);
-    color: white;
-}
-.status-options {
-    display: none;
-    position: absolute;
-    right: 100%;
-    top: 0;
-    margin-right: 10px;
-    background-color: var(--panel-bg);
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow);
-    padding: 10px;
-    width: 200px;
-    border: 1px solid #ddd;
-}
-.status-options.show {
-    display: block;
-}
-.status-option {
-    padding: 10px;
-    cursor: pointer;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.status-option:hover {
-    background-color: #f0f0f0;
-}
-
 
 @media (max-width: 768px) {
     .main-header { flex-direction: column; gap: 0px; padding: 5px; }
@@ -582,6 +518,4 @@ input:checked + .slider:before { transform: translateX(26px); }
     .bottom-chat-bar { padding: 5px; gap: 5px; }
     #bottomChatFriendSelect, #bottomChatInput, #bottomChatSendBtn, #toggleChatHistoryBtn { font-size: 0.8em; padding: 6px; }
     .search-form { grid-template-columns: 1fr; }
-    .map-controls { top: 110px; } /* Adjust for smaller screens */
-    .status-controls { top: 250px; }
 }
