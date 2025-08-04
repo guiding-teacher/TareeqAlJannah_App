@@ -285,9 +285,10 @@ body {
     z-index: 5;
 }
 
+/* *** تعديل: تصغير حجم صورة المستخدم على الخريطة *** */
 .user-marker-photo {
-    width: 60px;
-    height: 60px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     object-fit: cover;
     box-shadow: var(--shadow);
@@ -465,34 +466,6 @@ input:checked + .slider:before { transform: translateX(26px); }
     font-size: 14px;
 }
 
-/* إضافة هذه الأقسام إلى ملف style.css */
-
-/* تعديلات فقاعات الرسائل */
-.message-bubble {
-    position: absolute;
-    bottom: calc(100% + 15px);
-    background-color: #333;
-    color: white;
-    padding: 10px 15px;
-    border-radius: 25px;
-    font-size: 1em;
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
-    pointer-events: none;
-    transform: translateX(-50%) translateY(10px);
-    left: 50%;
-    z-index: 30;
-    box-shadow: var(--shadow);
-    direction: rtl;
-    unicode-bidi: embed;
-}
-.message-bubble.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-}
-
-/* أزرار التحكم بالخريطة */
 .map-controls {
     position: absolute;
     top: 80px;
@@ -519,19 +492,6 @@ input:checked + .slider:before { transform: translateX(26px); }
     background-color: #f0f0f0;
 }
 
-/* تعديلات المضيف */
-.moazeb-marker {
-    background-color: #006400;
-    color: white;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    border: 2px solid white;
-}
 .moazeb-marker i {
     font-size: 14px;
 }
