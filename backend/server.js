@@ -62,7 +62,12 @@ const UserSchema = new mongoose.Schema({
         location: {
             type: { type: String, enum: ['Point'], default: 'Point' },
             coordinates: { type: [Number] }
-        }
+        },
+        expiresAt: { type: Date } // إضافة حقل تاريخ انتهاء الصلاحية
+    },
+    linkedMoazeb: { // إضافة حقل لربط المضيف
+        moazebId: { type: mongoose.Schema.Types.ObjectId, ref: 'Moazeb' },
+        linkedAt: { type: Date }
     }
 }, { timestamps: true });
 
@@ -135,6 +140,7 @@ const MoazebSchema = new mongoose.Schema({
         coordinates: { type: [Number], required: true }
     },
     createdBy: { type: String, required: true },
+    linkedUsers: [{ type: String }] // إضافة حقل للمستخدمين المرتبطين
 }, { timestamps: true });
 MoazebSchema.index({ location: '2dsphere' });
 const Moazeb = mongoose.model('Moazeb', MoazebSchema);
@@ -147,6 +153,24 @@ app.get('/', (req, res) => {
 
 const connectedUsers = {};
 
+// وظيفة لحذف نقاط التجمع المنتهية
+async function cleanupExpiredMeetingPoints() {
+    try {
+        const result = await User.updateMany(
+            { 'meetingPoint.expiresAt': { $lt: new Date() } },
+            { $unset: { meetingPoint: 1 } }
+        );
+        if (result.modifiedCount > 0) {
+            console.log(`تم حذف ${result.modifiedCount} نقطة تجمع منتهية`);
+        }
+    } catch (error) {
+        console.error('خطأ في حذف نقاط التجمع المنتهية:', error);
+    }
+}
+
+// تشغيل المهمة كل ساعة
+setInterval(cleanupExpiredMeetingPoints, 3600000);
+
 // منطق Socket.IO
 io.on('connection', async (socket) => {
     console.log(`📡 مستخدم جديد متصل: ${socket.id}`);
@@ -157,7 +181,7 @@ io.on('connection', async (socket) => {
         const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
 
         try {
-            user = await User.findOne({ userId: userId }).populate('createdPOIs');
+            user = await User.findOne({ userId: userId }).populate('createdPOIs').populate('linkedMoazeb.moazebId');
 
             if (!user) {
                 user = new User({
@@ -199,6 +223,14 @@ io.on('connection', async (socket) => {
             if (user.linkedFriends && user.linkedFriends.length > 0) {
                 const friendsData = await User.find({ userId: { $in: user.linkedFriends } });
                 socket.emit('updateFriendsList', friendsData);
+            }
+
+            // إرسال بيانات المضيف المرتبط إذا كان موجوداً
+            if (user.linkedMoazeb && user.linkedMoazeb.moazebId) {
+                socket.emit('moazebConnectionData', { 
+                    moazeb: user.linkedMoazeb.moazebId,
+                    connectionLine: user.linkedMoazeb.connectionLine || []
+                });
             }
 
         } catch (error) {
@@ -258,6 +290,25 @@ io.on('connection', async (socket) => {
 
                     socket.emit('locationUpdate', locationData);
 
+                    // إذا كان المستخدم مرتبطاً بمضيف، تحديث خط الربط
+                    if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
+                        const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
+                        if (moazeb) {
+                            // إنشاء خط مسار يعكس الطرق الفعلية
+                            const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
+                            const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
+                            
+                            await User.updateOne(
+                                { userId: updatedUser.userId },
+                                { 'linkedMoazeb.connectionLine': connectionLine }
+                            );
+                            
+                            socket.emit('moazebConnectionUpdate', {
+                                moazebId: moazeb._id,
+                                connectionLine: connectionLine
+                            });
+                        }
+                    }
                 } else {
                     io.emit('removeUserMarker', { userId: updatedUser.userId });
                 }
@@ -526,9 +577,13 @@ io.on('connection', async (socket) => {
     socket.on('setMeetingPoint', async (data) => {
         if (!user || !data.name || !data.location) return;
         try {
+            // تعيين تاريخ انتهاء بعد 24 ساعة
+            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            
             user.meetingPoint = {
                 name: data.name,
-                location: { type: 'Point', coordinates: data.location }
+                location: { type: 'Point', coordinates: data.location },
+                expiresAt: expiresAt
             };
             await user.save();
             
@@ -624,16 +679,73 @@ io.on('connection', async (socket) => {
                 return;
             }
 
-            // يمكنك هنا إضافة أي منطق إضافي للربط مع المضيف
-            // مثلاً: إرسال إشعار للمضيف أو حفظ معلومات الربط
-            
+            // إضافة المستخدم إلى قائمة المرتبطين بالمضيف
+            if (!moazeb.linkedUsers.includes(user.userId)) {
+                moazeb.linkedUsers.push(user.userId);
+                await moazeb.save();
+            }
+
+            // إنشاء خط مسار يعكس الطرق الفعلية
+            let connectionLine = [];
+            if (user.location && user.location.coordinates) {
+                const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
+                connectionLine = routeResponse.data.routes[0].geometry.coordinates;
+            }
+
+            // تحديث بيانات الربط للمستخدم
+            user.linkedMoazeb = {
+                moazebId: moazeb._id,
+                linkedAt: new Date(),
+                connectionLine: connectionLine
+            };
+            await user.save();
+
             socket.emit('linkToMoazebStatus', { 
                 success: true, 
-                message: `تم الربط مع المضيف ${moazeb.name} بنجاح. رقم الهاتف: ${moazeb.phone}` 
+                message: `تم الربط مع المضيف ${moazeb.name} بنجاح. رقم الهاتف: ${moazeb.phone}`,
+                moazeb: moazeb,
+                connectionLine: connectionLine
             });
+
+            // إرسال بيانات الربط إلى العميل
+            socket.emit('moazebConnectionData', { 
+                moazeb: moazeb,
+                connectionLine: connectionLine
+            });
+
         } catch (error) {
             console.error('❌ خطأ في الربط مع المضيف:', error);
             socket.emit('linkToMoazebStatus', { success: false, message: 'حدث خطأ في الخادم.' });
+        }
+    });
+
+    socket.on('unlinkFromMoazeb', async () => {
+        if (!user || !user.linkedMoazeb) return;
+
+        try {
+            const moazebId = user.linkedMoazeb.moazebId;
+            user.linkedMoazeb = undefined;
+            await user.save();
+
+            // إزالة المستخدم من قائمة المرتبطين بالمضيف
+            await Moazeb.findByIdAndUpdate(moazebId, {
+                $pull: { linkedUsers: user.userId }
+            });
+
+            socket.emit('unlinkFromMoazebStatus', { 
+                success: true, 
+                message: 'تم إلغاء الربط مع المضيف بنجاح.'
+            });
+
+            // إرسال حدث لإزالة خط الربط من الخريطة
+            socket.emit('moazebConnectionRemoved');
+
+        } catch (error) {
+            console.error('❌ خطأ في إلغاء الربط مع المضيف:', error);
+            socket.emit('unlinkFromMoazebStatus', { 
+                success: false, 
+                message: 'حدث خطأ أثناء إلغاء الربط.'
+            });
         }
     });
 
