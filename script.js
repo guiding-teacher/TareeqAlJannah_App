@@ -1,5 +1,4 @@
-// script.js
-
+// تهيئة Mapbox
 mapboxgl.setRTLTextPlugin(
     'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.3.0/mapbox-gl-rtl-text.js',
     null,
@@ -29,7 +28,9 @@ let currentHistoricalPathLayer = null;
 let currentChatFriendId = null;
 let activeMessageTimers = {};
 let moazebConnectionLayerId = null;
-let prayerAlarms = []; // لتخزين مؤقتات منبهات الصلاة
+let proximityAlertPlayed = false;
+let prayerAlertPlayed = false;
+let lastPrayerTime = '';
 
 // المواقع الرئيسية في العراق
 const holySites = [];
@@ -296,6 +297,9 @@ function createMoazebMarker(moazeb) {
                 `<button class="unlink-from-moazeb-btn" data-moazeb-id="${moazeb._id}">
                     <i class="fas fa-unlink"></i> إلغاء الربط
                 </button>` : ''}
+            <button class="locate-moazeb-btn" data-moazeb-id="${moazeb._id}">
+                <i class="fas fa-map-marker-alt"></i> تحديد الموقع
+            </button>
         `))
         .addTo(map);
 
@@ -318,6 +322,19 @@ function createMoazebMarker(moazeb) {
                     if (confirm(`هل تريد إلغاء الربط مع المضيف ${moazeb.name}؟`)) {
                         socket.emit('unlinkFromMoazeb');
                     }
+                });
+            }
+
+            const locateBtn = document.querySelector(`.locate-moazeb-btn[data-moazeb-id="${moazeb._id}"]`);
+            if (locateBtn) {
+                locateBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    map.flyTo({
+                        center: moazeb.location.coordinates,
+                        zoom: 15,
+                        pitch: 45,
+                        bearing: -17.6
+                    });
                 });
             }
         }, 100);
@@ -365,7 +382,6 @@ function drawMoazebConnectionLine(connectionLine) {
     });
 }
 
-// *** تعديل: الدالة لا تحذف نقاط التجمع لضمان بقائها ***
 function clearAllDynamicMarkers() {
     Object.values(poiMarkers).forEach(marker => marker.remove());
     Object.keys(poiMarkers).forEach(key => delete poiMarkers[key]);
@@ -443,6 +459,17 @@ function showFriendsMap() {
     linkedFriends.forEach(friend => {
         if (friend.location && friend.location.coordinates && friend.settings && friend.settings.shareLocation && !friend.settings.stealthMode) {
             createCustomMarker(friend);
+        }
+    });
+
+    // عرض نقاط التجمع للأصدقاء المرتبطين
+    linkedFriends.forEach(friend => {
+        if (friend.meetingPoint && friend.meetingPoint.location && friend.meetingPoint.location.coordinates) {
+            createMeetingPointMarker({
+                creatorId: friend.userId,
+                creatorName: friend.name,
+                point: friend.meetingPoint
+            });
         }
     });
 
@@ -586,32 +613,57 @@ async function getBatteryStatus() {
     return 'N/A';
 }
 
-// *** تعديل: استخدام روابط صوتية فعالة وموثوقة ***
 function playNotificationSound() {
     if (currentUser && currentUser.settings.sound) {
-        const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-message-pop-alert-2354.mp3');
-        audio.play().catch(e => console.error("Error playing notification sound:", e));
+        const audio = new Audio('https://www.soundjay.com/buttons/beep-07.mp3');
+        audio.play().catch(e => console.error("Error playing sound:", e));
     }
 }
 
 function playSOSSound() {
     if (currentUser && currentUser.settings.sound) {
-        const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-tone-996.mp3');
-        audio.play().catch(e => console.error("Error playing SOS sound:", e));
+        const audio = new Audio('https://www.soundjay.com/misc/emergency-alert-911-01.mp3');
+        audio.play().catch(e => console.error("Error playing sound:", e));
     }
 }
 
 function playProximitySound() {
-    if (currentUser && currentUser.settings.sound) {
-        const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3');
-        audio.play().catch(e => console.error("Error playing proximity sound:", e));
+    if (currentUser && currentUser.settings.sound && !proximityAlertPlayed) {
+        const audio = new Audio('https://www.soundjay.com/mechanical/sounds/car-horn-01.mp3');
+        audio.play().catch(e => console.error("Error playing sound:", e));
+        proximityAlertPlayed = true;
+        setTimeout(() => { proximityAlertPlayed = false; }, 30000);
     }
 }
 
-function playAdhanSound() {
-     if (currentUser && currentUser.settings.sound) {
-        const audio = new Audio('https://www.islamcan.com/audio/adhan/azan2.mp3');
-        audio.play().catch(e => console.error("Error playing Adhan sound:", e));
+function playPrayerSound() {
+    if (currentUser && currentUser.settings.sound && !prayerAlertPlayed) {
+        const audio = new Audio('https://www.soundjay.com/religious/sounds/adhan-azan-01.mp3');
+        audio.play().catch(e => console.error("Error playing sound:", e));
+        prayerAlertPlayed = true;
+        setTimeout(() => { prayerAlertPlayed = false; }, 60000);
+    }
+}
+
+function convertTimeToMinutes(timeStr) {
+    const [time, period] = timeStr.split(' ');
+    const [hours, minutes] = time.split(':').map(Number);
+    let totalMinutes = hours * 60 + minutes;
+    if (period === 'PM' && hours !== 12) totalMinutes += 720;
+    if (period === 'AM' && hours === 12) totalMinutes -= 720;
+    return totalMinutes;
+}
+
+function checkPrayerTime(prayerTime) {
+    if (!prayerTime || prayerTime === lastPrayerTime) return;
+    
+    lastPrayerTime = prayerTime;
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const prayerMinutes = convertTimeToMinutes(prayerTime);
+    
+    if (Math.abs(currentTime - prayerMinutes) < 5) {
+        playPrayerSound();
     }
 }
 
@@ -635,6 +687,7 @@ function sendMessageFromBottomBar() {
             receiverId: currentChatFriendId,
             message: messageText
         });
+        if (currentUser.settings.sound) playNotificationSound();
         if (!currentUser.settings.hideBubbles) showMessageBubble(currentUser.userId, messageText);
         bottomChatInput.value = '';
     } else {
@@ -685,37 +738,6 @@ function fetchAndDisplayPrayerTimes() {
     displayElement.innerHTML = '<p>جاري جلب أوقات الصلاة...</p>';
     socket.emit('requestPrayerTimes');
 }
-
-// *** تعديل: وظيفة لجدولة منبهات الصلاة ***
-function schedulePrayerAlarms(timings) {
-    // إلغاء أي منبهات سابقة
-    prayerAlarms.forEach(clearTimeout);
-    prayerAlarms = [];
-
-    const now = new Date();
-    const prayerNames = {
-        Fajr: 'الفجر', Dhuhr: 'الظهر', Asr: 'العصر', Maghrib: 'المغرب', Isha: 'العشاء'
-    };
-
-    for (const prayer in prayerNames) {
-        if (timings[prayer]) {
-            const timeParts = timings[prayer].split(':');
-            const prayerTime = new Date();
-            prayerTime.setHours(parseInt(timeParts[0], 10), parseInt(timeParts[1], 10), 0, 0);
-
-            if (prayerTime > now) {
-                const delay = prayerTime.getTime() - now.getTime();
-                console.log(`Setting alarm for ${prayer} in ${delay / 1000 / 60} minutes.`);
-                const alarmTimeout = setTimeout(() => {
-                    playAdhanSound();
-                    alert(`حان الآن موعد أذان ${prayerNames[prayer]}`);
-                }, delay);
-                prayerAlarms.push(alarmTimeout);
-            }
-        }
-    }
-}
-
 
 function setupChatPanel() {
     const chatFriendSelect = document.getElementById('chatFriendSelect');
@@ -914,7 +936,6 @@ socket.on('currentUserData', (user) => {
     }
 });
 
-
 socket.on('locationUpdate', (data) => {
     let userToUpdate;
     if (currentUser && data.userId === currentUser.userId) {
@@ -924,22 +945,6 @@ socket.on('locationUpdate', (data) => {
     }
 
     if (userToUpdate) {
-        // *** تعديل: إضافة منطق تنبيه القرب ***
-        if (currentUser && userToUpdate.userId !== currentUser.userId && currentUser.location && currentUser.location.coordinates[0] !== 0) {
-            const distance = calculateDistance(
-                currentUser.location.coordinates[1], currentUser.location.coordinates[0],
-                data.location[1], data.location[0]
-            );
-            const PROXIMITY_THRESHOLD = 0.5; // 500 متر
-            if (distance < PROXIMITY_THRESHOLD && !userToUpdate.isNearby) {
-                userToUpdate.isNearby = true;
-                playProximitySound();
-                alert(`تنبيه القرب: ${userToUpdate.name} أصبح قريباً منك!`);
-            } else if (distance > PROXIMITY_THRESHOLD && userToUpdate.isNearby) {
-                userToUpdate.isNearby = false;
-            }
-        }
-
         Object.assign(userToUpdate, data);
         userToUpdate.location = { type: 'Point', coordinates: data.location };
         
@@ -960,6 +965,21 @@ socket.on('locationUpdate', (data) => {
             }
         }
         
+        // التحقق من القرب وإصدار صوت تنبيه
+        if (currentUser && currentUser.location && currentUser.location.coordinates && 
+            userToUpdate.userId !== currentUser.userId && 
+            userToUpdate.location && userToUpdate.location.coordinates) {
+            
+            const distance = calculateDistance(
+                currentUser.location.coordinates[1], currentUser.location.coordinates[0],
+                userToUpdate.location.coordinates[1], userToUpdate.location.coordinates[0]
+            );
+            
+            if (distance < 1) { // أقل من 1 كم
+                playProximitySound();
+            }
+        }
+
         if (isFriendsMapActive && currentUser && currentUser.userId !== userToUpdate.userId && shouldBeVisible) {
              const currentUserIsVisible = currentUser.settings.shareLocation && !currentUser.settings.stealthMode;
              if (currentUserIsVisible && currentUser.location && currentUser.location.coordinates) {
@@ -968,7 +988,6 @@ socket.on('locationUpdate', (data) => {
         }
     }
 });
-
 
 socket.on('linkStatus', (data) => {
     alert(data.message);
@@ -987,7 +1006,7 @@ socket.on('unfriendStatus', (data) => {
 });
 
 socket.on('updateFriendsList', (friendsData) => {
-    linkedFriends = friendsData.map(f => ({...f, isNearby: false })); // إضافة خاصية تتبع القرب
+    linkedFriends = friendsData;
     if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
         showFriendsMap();
     }
@@ -1020,7 +1039,7 @@ socket.on('updateFriendsList', (friendsData) => {
 socket.on('newChatMessage', (data) => {
     if (currentUser && data.receiverId === currentUser.userId) {
         if (!currentUser.settings.hideBubbles) showMessageBubble(data.senderId, data.message);
-        playNotificationSound();
+        if (currentUser.settings.sound) playNotificationSound();
         if (data.senderId === currentChatFriendId && document.getElementById('chatPanel').classList.contains('active')) {
             addChatMessage(data.senderName, data.message, 'received', data.timestamp);
         }
@@ -1111,7 +1130,7 @@ socket.on('meetingPointCleared', (data) => {
     if (meetingPointMarkers[data.creatorId]) {
         meetingPointMarkers[data.creatorId].remove();
         delete meetingPointMarkers[data.creatorId];
-        if (currentUser && data.creatorId !== currentUser.userId) {
+        if (data.creatorId !== currentUser.userId) {
            alert('تم إنهاء نقطة التجمع.');
         }
     }
@@ -1143,48 +1162,39 @@ socket.on('moazebSearchResults', (data) => {
         data.results.forEach(moazeb => {
             const card = document.createElement('div');
             card.className = 'moazeb-card';
-            // *** تعديل: إضافة زر "تحديد الموقع" ***
             card.innerHTML = `
                 <h4>${moazeb.name}</h4>
                 <p><i class="fas fa-map-marker-alt"></i> <strong>العنوان:</strong> ${moazeb.address}</p>
                 <p><i class="fas fa-phone"></i> <strong>الهاتف:</strong> ${moazeb.phone}</p>
                 <p><i class="fas fa-city"></i> <strong>المحافظة:</strong> ${moazeb.governorate} - ${moazeb.district}</p>
                 <button class="link-to-moazeb-btn" data-moazeb-id="${moazeb._id}">
-                    <i class="fas fa-link"></i> ربط
+                    <i class="fas fa-link"></i> الربط بالمضيف
                 </button>
-                <button class="locate-moazeb-btn" data-lng="${moazeb.location.coordinates[0]}" data-lat="${moazeb.location.coordinates[1]}">
-                    <i class="fas fa-map-pin"></i> تحديد الموقع
+                <button class="locate-moazeb-btn" data-moazeb-id="${moazeb._id}">
+                    <i class="fas fa-map-marker-alt"></i> تحديد الموقع
                 </button>
             `;
             resultsContainer.appendChild(card);
+            
+            card.querySelector('.link-to-moazeb-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`هل تريد الربط مع المضيف ${moazeb.name}؟`)) {
+                    socket.emit('linkToMoazeb', { moazebId: moazeb._id });
+                }
+            });
+
+            card.querySelector('.locate-moazeb-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                map.flyTo({
+                    center: moazeb.location.coordinates,
+                    zoom: 15,
+                    pitch: 45,
+                    bearing: -17.6
+                });
+            });
+
             createMoazebMarker(moazeb);
         });
-
-        // *** تعديل: إضافة مستمعي الأحداث للأزرار الجديدة ***
-        document.querySelectorAll('.link-to-moazeb-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const moazebId = e.currentTarget.dataset.moazebId;
-                if (confirm(`هل تريد الربط مع هذا المضيف؟`)) {
-                    socket.emit('linkToMoazeb', { moazebId: moazebId });
-                }
-            });
-        });
-        
-        document.querySelectorAll('.locate-moazeb-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const button = e.currentTarget;
-                const lng = parseFloat(button.dataset.lng);
-                const lat = parseFloat(button.dataset.lat);
-                if (!isNaN(lng) && !isNaN(lat)) {
-                    map.flyTo({
-                        center: [lng, lat],
-                        zoom: 15,
-                        essential: true
-                    });
-                }
-            });
-        });
-
         const bounds = new mapboxgl.LngLatBounds();
         data.results.forEach(m => bounds.extend(m.location.coordinates));
         map.fitBounds(bounds, { padding: 50 });
@@ -1193,7 +1203,6 @@ socket.on('moazebSearchResults', (data) => {
         resultsContainer.innerHTML = '<p class="feature-info">لا توجد نتائج تطابق بحثك.</p>';
     }
 });
-
 
 socket.on('allMoazebData', (data) => {
     if (data.success && data.moazebs) {
@@ -1260,8 +1269,13 @@ socket.on('prayerTimesData', (data) => {
     if (data.success) {
         const { Fajr, Dhuhr, Asr, Maghrib, Isha } = data.timings;
         displayElement.innerHTML = `<p><strong>الفجر:</strong> ${Fajr}</p><p><strong>الظهر:</strong> ${Dhuhr}</p><p><strong>العصر:</strong> ${Asr}</p><p><strong>المغرب:</strong> ${Maghrib}</p><p><strong>العشاء:</strong> ${Isha}</p>`;
-        // *** تعديل: جدولة المنبهات عند استلام الأوقات ***
-        schedulePrayerAlarms(data.timings);
+        
+        // التحقق من وقت الصلاة الحالي وتشغيل التنبيه
+        checkPrayerTime(Fajr);
+        checkPrayerTime(Dhuhr);
+        checkPrayerTime(Asr);
+        checkPrayerTime(Maghrib);
+        checkPrayerTime(Isha);
     } else {
         displayElement.innerHTML = `<p style="color: var(--danger-color);">${data.message || 'فشل جلب أوقات الصلاة.'}</p>`;
     }
@@ -1515,7 +1529,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (confirm("هل أنت متأكد من رغبتك في إرسال إشارة استغاثة (SOS)؟ سيتم إرسال رسالة واتساب إلى رقم الطوارئ الخاص بك وموقعك الجغرافي.")) {
-            playSOSSound();
+            if (currentUser.settings.sound) {
+                playSOSSound();
+            }
 
             let message = "مساعدة عاجلة! أنا بحاجة للمساعدة.\n";
             if (currentUser.location && currentUser.location.coordinates) {
@@ -1629,6 +1645,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('shareLocationToggle').addEventListener('change', (e) => {
         if (currentUser) socket.emit('updateSettings', { shareLocation: e.target.checked });
     });
+
 
     document.getElementById('soundToggle').addEventListener('change', (e) => {
         if (currentUser) {
