@@ -28,6 +28,7 @@ const moazebMarkers = {};
 let currentHistoricalPathLayer = null;
 let currentChatFriendId = null;
 let activeMessageTimers = {};
+let moazebConnectionLayerId = null;
 
 // المواقع الرئيسية في العراق
 const holySites = [];
@@ -195,7 +196,9 @@ function createPOIMarker(poi) {
             <p>${poi.description || 'لا يوجد وصف'}</p>
             <p><strong>الفئة:</strong> ${poi.category}</p>
             ${currentUser && poi.createdBy === currentUser.userId ? 
-                `<button class="delete-poi-btn" data-poi-id="${poi._id}"><i class="fas fa-trash"></i> حذف</button>` : ''}
+                `<button class="delete-poi-btn" data-poi-id="${poi._id}">
+                    <i class="fas fa-trash"></i> حذف
+                </button>` : ''}
         `))
         .addTo(map);
 
@@ -234,6 +237,7 @@ function createMeetingPointMarker(data) {
         .setPopup(new mapboxgl.Popup({ offset: 35 }).setHTML(`
             <h3>نقطة تجمع: ${point.name}</h3>
             <p>أنشأها: ${creatorName}</p>
+            ${point.expiresAt ? `<p><i class="fas fa-clock"></i> تنتهي في: ${new Date(point.expiresAt).toLocaleString()}</p>` : ''}
         `))
         .addTo(map);
     
@@ -290,6 +294,10 @@ function createMoazebMarker(moazeb) {
             <button class="link-to-moazeb-btn" data-moazeb-id="${moazeb._id}">
                 <i class="fas fa-link"></i> الربط بالمضيف
             </button>
+            ${currentUser && currentUser.linkedMoazeb && currentUser.linkedMoazeb.moazebId === moazeb._id ? 
+                `<button class="unlink-from-moazeb-btn" data-moazeb-id="${moazeb._id}">
+                    <i class="fas fa-unlink"></i> إلغاء الربط
+                </button>` : ''}
         `))
         .addTo(map);
 
@@ -304,11 +312,63 @@ function createMoazebMarker(moazeb) {
                     }
                 });
             }
+            
+            const unlinkBtn = document.querySelector(`.unlink-from-moazeb-btn[data-moazeb-id="${moazeb._id}"]`);
+            if (unlinkBtn) {
+                unlinkBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm(`هل تريد إلغاء الربط مع المضيف ${moazeb.name}؟`)) {
+                        socket.emit('unlinkFromMoazeb');
+                    }
+                });
+            }
         }, 100);
     });
 
     moazebMarkers[moazeb._id] = marker;
     return marker;
+}
+
+function drawMoazebConnectionLine(connectionLine) {
+    // إزالة الطبقة القديمة إذا كانت موجودة
+    if (moazebConnectionLayerId && map.getLayer(moazebConnectionLayerId)) {
+        map.removeLayer(moazebConnectionLayerId);
+        map.removeSource(moazebConnectionLayerId);
+    }
+
+    if (!connectionLine || connectionLine.length < 2) return;
+
+    // إنشاء معرف فريد للطبقة
+    moazebConnectionLayerId = 'moazeb-connection-' + Date.now();
+
+    // إضافة مصدر جديد للخط
+    map.addSource(moazebConnectionLayerId, {
+        type: 'geojson',
+        data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: connectionLine
+            }
+        }
+    });
+
+    // إضافة الطبقة الجديدة
+    map.addLayer({
+        id: moazebConnectionLayerId,
+        type: 'line',
+        source: moazebConnectionLayerId,
+        layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+        },
+        paint: {
+            'line-color': '#FFA500', // لون برتقالي
+            'line-width': 4,
+            'line-dasharray': [2, 2] // خط متقطع
+        }
+    });
 }
 
 function clearAllDynamicMarkers() {
@@ -322,6 +382,13 @@ function clearAllDynamicMarkers() {
     Object.keys(moazebMarkers).forEach(key => delete moazebMarkers[key]);
     
     clearHistoricalPath();
+    
+    // إزالة خط الربط مع المضيف
+    if (moazebConnectionLayerId && map.getLayer(moazebConnectionLayerId)) {
+        map.removeLayer(moazebConnectionLayerId);
+        map.removeSource(moazebConnectionLayerId);
+        moazebConnectionLayerId = null;
+    }
 }
 
 function showGeneralMap() {
@@ -590,7 +657,7 @@ function showMessageBubble(userId, messageText) {
         bubble.classList.add('show');
         activeMessageTimers[userId] = setTimeout(() => {
             bubble.classList.remove('show');
-        }, 30000);
+        }, 30000); // 30 ثانية بدلاً من الاختفاء الفوري
     }
 }
 
@@ -1018,7 +1085,30 @@ socket.on('allMoazebData', (data) => {
 socket.on('linkToMoazebStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        // يمكنك إضافة أي إجراء إضافي هنا بعد الربط الناجح
+        // إظهار خط الربط على الخريطة
+        if (data.connectionLine && data.connectionLine.length > 0) {
+            drawMoazebConnectionLine(data.connectionLine);
+        }
+    }
+});
+
+socket.on('moazebConnectionData', (data) => {
+    if (data.connectionLine && data.connectionLine.length > 0) {
+        drawMoazebConnectionLine(data.connectionLine);
+    }
+});
+
+socket.on('moazebConnectionUpdate', (data) => {
+    if (data.connectionLine && data.connectionLine.length > 0) {
+        drawMoazebConnectionLine(data.connectionLine);
+    }
+});
+
+socket.on('moazebConnectionRemoved', () => {
+    if (moazebConnectionLayerId && map.getLayer(moazebConnectionLayerId)) {
+        map.removeLayer(moazebConnectionLayerId);
+        map.removeSource(moazebConnectionLayerId);
+        moazebConnectionLayerId = null;
     }
 });
 
