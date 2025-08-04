@@ -92,7 +92,8 @@ function createCustomMarker(user) {
         el.classList.add('stealth-mode');
     }
 
-    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER';
+    // *** تعديل: استخدام الصورة المحلية كافتراضي
+    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'image/Picsart_25-08-03_16-47-02-591.png';
 
     el.innerHTML = `
         <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}">
@@ -153,7 +154,8 @@ function showFriendDetailsPopup(friend) {
         </div>
     `;
 
-    const popup = new mapboxgl.Popup({ offset: 25 })
+    // *** تعديل: زيادة الإزاحة (offset) للنافذة المنبثقة
+    const popup = new mapboxgl.Popup({ offset: 50 })
         .setLngLat(friend.location.coordinates)
         .setHTML(popupContent)
         .addTo(map);
@@ -191,7 +193,8 @@ function createPOIMarker(poi) {
 
     const marker = new mapboxgl.Marker(el)
         .setLngLat(poi.location.coordinates)
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
+         // *** تعديل: زيادة الإزاحة (offset) للنافذة المنبثقة
+        .setPopup(new mapboxgl.Popup({ offset: 30 }).setHTML(`
             <h3>${poi.name}</h3>
             <p>${poi.description || 'لا يوجد وصف'}</p>
             <p><strong>الفئة:</strong> ${poi.category}</p>
@@ -234,7 +237,8 @@ function createMeetingPointMarker(data) {
 
     const marker = new mapboxgl.Marker(el)
         .setLngLat(point.location.coordinates)
-        .setPopup(new mapboxgl.Popup({ offset: 35 }).setHTML(`
+        // *** تعديل: زيادة الإزاحة (offset) للنافذة المنبثقة
+        .setPopup(new mapboxgl.Popup({ offset: 40 }).setHTML(`
             <h3>نقطة تجمع: ${point.name}</h3>
             <p>أنشأها: ${creatorName}</p>
             ${point.expiresAt ? `<p><i class="fas fa-clock"></i> تنتهي في: ${new Date(point.expiresAt).toLocaleString()}</p>` : ''}
@@ -254,7 +258,6 @@ function createMoazebMarker(moazeb) {
     const el = document.createElement('div');
     el.className = 'moazeb-marker';
     
-    // تحديد أيقونة حسب نوع المكان مع لون أخضر
     let iconClass;
     switch(moazeb.type) {
         case 'mawkib': iconClass = 'fas fa-flag'; break;
@@ -266,15 +269,13 @@ function createMoazebMarker(moazeb) {
         default: iconClass = 'fas fa-home';
     }
     
-    // إنشاء العنصر بنفس نمط POI ولكن بلون أخضر
     el.innerHTML = `
         <div class="moazeb-icon-container">
             <i class="${iconClass}"></i>
         </div>
     `;
 
-    // إضافة ستايل مباشر للون الأخضر
-    el.style.backgroundColor = '#006400'; // أخضر داكن
+    el.style.backgroundColor = '#006400';
     el.style.color = 'white';
     el.style.borderRadius = '50%';
     el.style.width = '30px';
@@ -286,7 +287,8 @@ function createMoazebMarker(moazeb) {
 
     const marker = new mapboxgl.Marker(el)
         .setLngLat(moazeb.location.coordinates)
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
+        // *** تعديل: زيادة الإزاحة (offset) للنافذة المنبثقة
+        .setPopup(new mapboxgl.Popup({ offset: 30 }).setHTML(`
             <h3>${moazeb.name}</h3>
             <p><i class="fas fa-phone"></i> ${moazeb.phone}</p>
             <p><i class="fas fa-map-marker-alt"></i> ${moazeb.address}</p>
@@ -330,7 +332,6 @@ function createMoazebMarker(moazeb) {
 }
 
 function drawMoazebConnectionLine(connectionLine) {
-    // إزالة الطبقة القديمة إذا كانت موجودة
     if (moazebConnectionLayerId && map.getLayer(moazebConnectionLayerId)) {
         map.removeLayer(moazebConnectionLayerId);
         map.removeSource(moazebConnectionLayerId);
@@ -338,10 +339,8 @@ function drawMoazebConnectionLine(connectionLine) {
 
     if (!connectionLine || connectionLine.length < 2) return;
 
-    // إنشاء معرف فريد للطبقة
     moazebConnectionLayerId = 'moazeb-connection-' + Date.now();
 
-    // إضافة مصدر جديد للخط
     map.addSource(moazebConnectionLayerId, {
         type: 'geojson',
         data: {
@@ -354,7 +353,6 @@ function drawMoazebConnectionLine(connectionLine) {
         }
     });
 
-    // إضافة الطبقة الجديدة
     map.addLayer({
         id: moazebConnectionLayerId,
         type: 'line',
@@ -364,9 +362,9 @@ function drawMoazebConnectionLine(connectionLine) {
             'line-cap': 'round'
         },
         paint: {
-            'line-color': '#FFA500', // لون برتقالي
+            'line-color': '#FFA500',
             'line-width': 4,
-            'line-dasharray': [2, 2] // خط متقطع
+            'line-dasharray': [2, 2]
         }
     });
 }
@@ -383,7 +381,6 @@ function clearAllDynamicMarkers() {
     
     clearHistoricalPath();
     
-    // إزالة خط الربط مع المضيف
     if (moazebConnectionLayerId && map.getLayer(moazebConnectionLayerId)) {
         map.removeLayer(moazebConnectionLayerId);
         map.removeSource(moazebConnectionLayerId);
@@ -657,7 +654,7 @@ function showMessageBubble(userId, messageText) {
         bubble.classList.add('show');
         activeMessageTimers[userId] = setTimeout(() => {
             bubble.classList.remove('show');
-        }, 30000); // 30 ثانية بدلاً من الاختفاء الفوري
+        }, 30000); 
     }
 }
 
@@ -765,7 +762,6 @@ function updateMyCreationsList() {
             li.textContent = `${poi.name} (${poi.category})`;
             ul.appendChild(li);
             
-            // Add to POIs list with delete button
             const poiLi = document.createElement('li');
             poiLi.innerHTML = `${poi.name} (${poi.category}) 
                 <button class="delete-poi-btn-small" data-poi-id="${poi._id}">
@@ -773,7 +769,6 @@ function updateMyCreationsList() {
                 </button>`;
             poisListContainer.appendChild(poiLi);
             
-            // Add event listener for delete button
             poiLi.querySelector('.delete-poi-btn-small').addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (confirm(`هل أنت متأكد أنك تريد حذف نقطة الاهتمام "${poi.name}"؟`)) {
@@ -790,12 +785,6 @@ function updateMyCreationsList() {
     }
 }
 
-
-
-
-// إضافة هذه الأجزاء إلى ملف script.js
-
-// أزرار التحكم بالخريطة
 function setupMapControls() {
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'map-controls';
@@ -828,83 +817,7 @@ function setupMapControls() {
     document.getElementById('map').appendChild(controlsDiv);
 }
 
-// تعديل وظيفة عرض فقاعة الرسالة
-function showMessageBubble(userId, messageText) {
-    const bubble = document.getElementById(`msg-bubble-${userId}`);
-    if (bubble) {
-        if (activeMessageTimers[userId]) {
-            clearTimeout(activeMessageTimers[userId]);
-        }
-        bubble.textContent = messageText;
-        bubble.classList.add('show');
-        activeMessageTimers[userId] = setTimeout(() => {
-            bubble.classList.remove('show');
-        }, 30000); // 30 ثانية بدلاً من الاختفاء الفوري
-    }
-}
-
-// تعديل وظيفة تحديث الموقع لتجنب إخفاء الفقاعات
-socket.on('locationUpdate', (data) => {
-    let userToUpdate;
-    if (currentUser && data.userId === currentUser.userId) {
-        currentUser.location = { type: 'Point', coordinates: data.location };
-        userToUpdate = currentUser;
-    } else {
-        userToUpdate = linkedFriends.find(f => f.userId === data.userId);
-    }
-    
-    if (userToUpdate) {
-        Object.assign(userToUpdate, data);
-        userToUpdate.location = { type: 'Point', coordinates: data.location };
-        if (!userToUpdate.settings.shareLocation || userToUpdate.settings.stealthMode) {
-            if (friendMarkers[userToUpdate.userId]) {
-                friendMarkers[userToUpdate.userId].remove();
-                delete friendMarkers[userToUpdate.userId];
-            }
-        } else {
-            if (userToUpdate.location && userToUpdate.location.coordinates) {
-                createCustomMarker(userToUpdate);
-            }
-        }
-    }
-});
-
-// تعديل وظيفة الربط بالمضيف
-socket.on('linkToMoazebStatus', (data) => {
-    if (data.success) {
-        alert(data.message);
-        // إظهار خط الربط على الخريطة
-        if (data.connectionLine && data.connectionLine.length > 0) {
-            drawMoazebConnectionLine(data.connectionLine);
-        }
-        // تحديث بيانات المستخدم
-        socket.emit('registerUser', { userId: currentUser.userId });
-    } else {
-        alert(data.message || 'حدث خطأ في الربط مع المضيف');
-    }
-});
-
-// تعديل وظيفة نقطة التجمع
-socket.on('newMeetingPoint', (data) => {
-    createMeetingPointMarker(data);
-    if (currentUser && data.creatorId === currentUser.userId) {
-        document.getElementById('endMeetingPointBtn').style.display = 'block';
-        updateMyCreationsList();
-    }
-});
-
-// إضافة التحكم بالخريطة عند التحميل
-map.on('load', () => {
-    showGeneralMap();
-    document.getElementById('showGeneralMapBtn').classList.add('active');
-    setupMapControls(); // إضافة أزرار التحكم
-});
-
-
-
-
-
-
+// *** تعديل مهم: تم دمج وإصلاح معالج locationUpdate ***
 // التعامل مع أحداث WebSocket من الخادم
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId');
@@ -963,33 +876,52 @@ socket.on('currentUserData', (user) => {
     }
 });
 
+
+// *** تعديل مهم: معالج `locationUpdate` جديد وموحد لإصلاح مشكلة فقاعة الرسائل ***
 socket.on('locationUpdate', (data) => {
     let userToUpdate;
+    // تحديث بيانات المستخدم (إما الحالي أو صديق)
     if (currentUser && data.userId === currentUser.userId) {
-        currentUser.location = { type: 'Point', coordinates: data.location };
         userToUpdate = currentUser;
     } else {
         userToUpdate = linkedFriends.find(f => f.userId === data.userId);
     }
-    
+
     if (userToUpdate) {
+        // تحديث البيانات المستلمة في الكائن المحلي
         Object.assign(userToUpdate, data);
         userToUpdate.location = { type: 'Point', coordinates: data.location };
-        if (!userToUpdate.settings.shareLocation || userToUpdate.settings.stealthMode) {
-            if (friendMarkers[userToUpdate.userId]) {
-                friendMarkers[userToUpdate.userId].remove();
-                delete friendMarkers[userToUpdate.userId];
+        
+        const marker = friendMarkers[userToUpdate.userId];
+        const isFriendsMapActive = document.getElementById('showFriendsMapBtn').classList.contains('active');
+        const shouldBeVisible = userToUpdate.settings.shareLocation && !userToUpdate.settings.stealthMode;
+
+        if (isFriendsMapActive && shouldBeVisible) {
+            if (marker) {
+                // إذا كانت الأيقونة موجودة، فقط قم بتحريكها. هذا يحافظ على فقاعة الرسالة.
+                marker.setLngLat(userToUpdate.location.coordinates);
+            } else {
+                // إذا لم تكن موجودة، قم بإنشائها.
+                createCustomMarker(userToUpdate);
             }
         } else {
-            if (userToUpdate.location && userToUpdate.location.coordinates) {
-                 createCustomMarker(userToUpdate);
+            // إذا كان لا ينبغي أن يكون المستخدم مرئيًا، قم بإزالة الأيقونة إذا كانت موجودة.
+            if (marker) {
+                marker.remove();
+                delete friendMarkers[userToUpdate.userId];
             }
         }
-    }
-    if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
-       showFriendsMap();
+        
+        // تحديث خط الاتصال إذا كانت خريطة الأصدقاء نشطة
+        if (isFriendsMapActive && currentUser && currentUser.userId !== userToUpdate.userId && shouldBeVisible) {
+             const currentUserIsVisible = currentUser.settings.shareLocation && !currentUser.settings.stealthMode;
+             if (currentUserIsVisible && currentUser.location && currentUser.location.coordinates) {
+                  drawConnectionLine(currentUser.location.coordinates, userToUpdate.location.coordinates, `line-${currentUser.userId}-${userToUpdate.userId}`);
+             }
+        }
     }
 });
+
 
 socket.on('linkStatus', (data) => {
     alert(data.message);
@@ -1065,8 +997,22 @@ socket.on('removeUserMarker', (data) => {
 socket.on('poiStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        socket.emit('requestPOIs');
+        // لا داعي لطلب قائمة POIs مجدداً، سيتم تحديثها عبر newPOIAdded
         socket.emit('registerUser', { userId: currentUser.userId });
+    }
+});
+
+// *** تعديل: الاستماع للنقاط الجديدة والمحذوفة في الوقت الفعلي ***
+socket.on('newPOIAdded', (poi) => {
+    console.log("تمت إضافة نقطة اهتمام جديدة:", poi);
+    createPOIMarker(poi);
+});
+
+socket.on('poiDeletedBroadcast', (data) => {
+    if (poiMarkers[data.poiId]) {
+        poiMarkers[data.poiId].remove();
+        delete poiMarkers[data.poiId];
+        console.log("تم حذف نقطة اهتمام من الخريطة:", data.poiId);
     }
 });
 
@@ -1120,7 +1066,9 @@ socket.on('meetingPointCleared', (data) => {
     if (meetingPointMarkers[data.creatorId]) {
         meetingPointMarkers[data.creatorId].remove();
         delete meetingPointMarkers[data.creatorId];
-        alert('تم إنهاء نقطة التجمع.');
+        if (data.creatorId !== currentUser.userId) {
+           alert('تم إنهاء نقطة التجمع.');
+        }
     }
     if (currentUser && data.creatorId === currentUser.userId) {
         document.getElementById('endMeetingPointBtn').style.display = 'none';
@@ -1161,7 +1109,6 @@ socket.on('moazebSearchResults', (data) => {
             `;
             resultsContainer.appendChild(card);
             
-            // Add event listener for link button
             card.querySelector('.link-to-moazeb-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (confirm(`هل تريد الربط مع المضيف ${moazeb.name}؟`)) {
@@ -1200,10 +1147,10 @@ socket.on('allMoazebData', (data) => {
 socket.on('linkToMoazebStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        // إظهار خط الربط على الخريطة
         if (data.connectionLine && data.connectionLine.length > 0) {
             drawMoazebConnectionLine(data.connectionLine);
         }
+        socket.emit('registerUser', { userId: currentUser.userId });
     }
 });
 
@@ -1253,6 +1200,7 @@ socket.on('prayerTimesData', (data) => {
 map.on('load', () => {
     showGeneralMap();
     document.getElementById('showGeneralMapBtn').classList.add('active');
+    setupMapControls();
 });
 
 document.addEventListener('DOMContentLoaded', () => {
