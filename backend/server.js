@@ -33,7 +33,7 @@ mongoose.connect(DB_URI)
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    photo: { type: String, default: 'image/husseini_avatar1.png' },
+    photo: { type: String, default: 'image/Picsart_25-08-03_16-47-02-591.png' },
     linkCode: { type: String, unique: true, sparse: true },
     location: {
         type: {
@@ -151,10 +151,10 @@ const MoazebSchema = new mongoose.Schema({
 MoazebSchema.index({ location: '2dsphere' });
 const Moazeb = mongoose.model('Moazeb', MoazebSchema);
 
-// *** إعدادات Express بعد التصحيح ***
-app.use(express.static(__dirname)); // <-- التعديل هنا
+// إعدادات Express
+app.use(express.static(path.join(__dirname, '../')));
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html')); // <-- التعديل هنا
+    res.sendFile(path.join(__dirname, '../index.html'));
 });
 
 const connectedUsers = {};
@@ -193,7 +193,7 @@ io.on('connection', async (socket) => {
                 user = new User({
                     userId: userId,
                     name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
-                    photo: photo || 'image/husseini_avatar1.png',
+                    photo: photo || 'image/Picsart_25-08-03_16-47-02-591.png',
                     location: { type: 'Point', coordinates: [0, 0] },
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
                     settings: {
@@ -208,9 +208,6 @@ io.on('connection', async (socket) => {
                 await user.save();
                 console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
             } else {
-                if (!user.photo || user.photo === '') {
-                    user.photo = 'image/Picsart_25-08-03_16-47-02-591.png';
-                }
                 if (name && user.name !== name) user.name = name;
                 if (photo && user.photo !== photo) user.photo = photo;
                 if (gender && user.gender !== gender) user.gender = gender;
@@ -234,6 +231,8 @@ io.on('connection', async (socket) => {
                 socket.emit('updateFriendsList', friendsData);
             }
 
+            // *** تعديل: إعلام الأصدقاء المرتبطين فورًا عند اتصال المستخدم ***
+            // هذا يضمن ظهور المستخدم على خرائط أصدقائه بمجرد اتصاله.
             if (user.settings.shareLocation && !user.settings.stealthMode && user.location && (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0)) {
                 const locationData = {
                     userId: user.userId,
@@ -255,6 +254,7 @@ io.on('connection', async (socket) => {
                 });
             }
 
+            // إرسال بيانات المضيف المرتبط إذا كان موجوداً
             if (user.linkedMoazeb && user.linkedMoazeb.moazebId) {
                 socket.emit('moazebConnectionData', { 
                     moazeb: user.linkedMoazeb.moazebId,
@@ -311,14 +311,18 @@ io.on('connection', async (socket) => {
                         email: updatedUser.email
                     };
                     
+                    // إرسال التحديث للمستخدم نفسه
                     socket.emit('locationUpdate', locationData);
                     
+                    // إرسال التحديث للأصدقاء المرتبطين
                     updatedUser.linkedFriends.forEach(friendId => {
                          if (connectedUsers[friendId]) {
                             io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
                          }
                     });
 
+
+                    // إذا كان المستخدم مرتبطاً بمضيف، تحديث خط الربط
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
