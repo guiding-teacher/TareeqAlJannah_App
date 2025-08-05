@@ -1183,14 +1183,23 @@ socket.on('moazebSearchResults', (data) => {
                 }
             });
 
+            // *** تعديل: إضافة إغلاق النافذة عند تحديد الموقع ***
             card.querySelector('.locate-moazeb-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
+                
+                // 1. توجيه الخريطة إلى موقع المعزب
                 map.flyTo({
                     center: moazeb.location.coordinates,
                     zoom: 15,
                     pitch: 45,
                     bearing: -17.6
                 });
+
+                // 2. إغلاق لوحة البحث
+                togglePanel(null);
+
+                // 3. تفعيل زر الخريطة العامة في الهيدر
+                document.getElementById('showGeneralMapBtn').classList.add('active');
             });
 
             createMoazebMarker(moazeb);
