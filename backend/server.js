@@ -229,8 +229,8 @@ io.on('connection', async (socket) => {
                     break;
                     
                 case 'users':
-                    payload = await User.find({}, 'userId name photo linkCode phone email isBanned').lean();
-                    break;
+    payload = await User.find({}, 'userId name photo linkCode phone email isBanned location').lean();
+    break;
 
                 case 'messages':
                     const messages = await Message.find().sort({ timestamp: -1 }).limit(200).lean();
