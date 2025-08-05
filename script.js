@@ -880,7 +880,6 @@ function setupMapControls() {
     document.getElementById('map').appendChild(controlsDiv);
 }
 
-// دالة لتحديث قائمة الأصدقاء في لوحة الربط
 function updateFriendsPanelList() {
     const friendsListEl = document.getElementById('friendsList');
     if (!friendsListEl) return;
@@ -993,7 +992,6 @@ socket.on('locationUpdate', (data) => {
             }
         }
         
-        // التحقق من القرب وإصدار صوت تنبيه
         if (currentUser && currentUser.location && currentUser.location.coordinates && 
             userToUpdate.userId !== currentUser.userId && 
             userToUpdate.location && userToUpdate.location.coordinates) {
@@ -1003,7 +1001,7 @@ socket.on('locationUpdate', (data) => {
                 userToUpdate.location.coordinates[1], userToUpdate.location.coordinates[0]
             );
             
-            if (distance < 1) { // أقل من 1 كم
+            if (distance < 1) {
                 playProximitySound();
             }
         }
@@ -1017,48 +1015,56 @@ socket.on('locationUpdate', (data) => {
     }
 });
 
+// =================================================================================
+// *** بداية التعديل: معالجة مشكلة الربط بين الأصدقاء ***
 socket.on('linkStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        // نغلق أي لوحة مفتوحة. سيتم تحديث الخريطة وشريط الدردشة
-        // تلقائياً عند وصول حدث 'updateFriendsList'.
+        // الخطوة 1: إغلاق لوحة الربط
         togglePanel(null);
+
+        // الخطوة 2: تنشيط زر "خريطة الأصدقاء" برمجياً ولكن بدون النقر عليه
+        // هذا يضمن أنه عند وصول حدث 'updateFriendsList' التالي،
+        // سيتم استدعاء showFriendsMap() تلقائياً لتحديث الخريطة بالبيانات الصحيحة.
+        document.querySelectorAll('.main-header nav button').forEach(btn => btn.classList.remove('active'));
+        const friendsMapBtn = document.getElementById('showFriendsMapBtn');
+        if (friendsMapBtn) {
+            friendsMapBtn.classList.add('active');
+        }
+
+        // ملاحظة: لا نستدعي showFriendsMap() أو setupBottomChatBar() هنا مباشرة.
+        // نعتمد على حدث 'updateFriendsList' الذي سيصل من الخادم قريباً للقيام بذلك،
+        // مما يمنع حدوث حالة سباق (race condition) ويضمن أن البيانات محدثة تماماً.
+        // هذا يصلح مشكلة عدم ظهور الصديق والخط وشريط الدردشة إلا بعد التحديث.
     }
 });
+// *** نهاية التعديل ***
+// =================================================================================
+
 
 socket.on('unfriendStatus', (data) => {
     alert(data.message);
     if (data.success) {
         socket.emit('registerUser', { userId: currentUser.userId });
+        document.getElementById('showFriendsMapBtn').click();
     }
 });
 
-// =================================================================================
-// ============== تعديل جوهري: هذا هو الجزء الأهم في الإصلاح ========================
-// =================================================================================
 socket.on('updateFriendsList', (friendsData) => {
     linkedFriends = friendsData;
-
-    // 1. تحديث الخريطة دائماً لإظهار الصديق الجديد والخط بينكما وتقريب المسافة.
-    // هذا يحل مشكلة عدم ظهور الصديق والخط المتقطع بعد الربط مباشرة.
-    showFriendsMap(); 
-
-    // 2. إعداد شريط الدردشة دائماً لضمان ظهوره بعد إضافة أول صديق أو تحديث القائمة.
-    // هذا يحل مشكلة اختفاء شريط الدردشة.
+    // إذا كانت خريطة الأصدقاء هي النشطة، قم بإعادة رسمها بالبيانات الجديدة
+    if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
+        showFriendsMap();
+    }
+    // تحديث شريط الدردشة السفلي (سيظهر الآن بشكل صحيح بعد الربط)
     setupBottomChatBar();
-
-    // 3. تحديث قائمة الأصدقاء في لوحة "الربط" إذا كانت مفتوحة.
+    // تحديث قائمة الأصدقاء في لوحة الربط إذا كانت مفتوحة
     if (document.getElementById('connectPanel').classList.contains('active')) {
         updateFriendsPanelList();
     }
-    
-    // 4. تحديث حالة البطارية في لوحة "الميزات".
+    // تحديث قائمة حالة البطارية
     updateFriendBatteryStatus();
 });
-// =================================================================================
-// ========================= نهاية التعديل الجوهري ================================
-// =================================================================================
-
 
 socket.on('newChatMessage', (data) => {
     if (currentUser && data.receiverId === currentUser.userId) {
@@ -1216,9 +1222,9 @@ socket.on('moazebSearchResults', (data) => {
                     pitch: 45,
                     bearing: -17.6
                 });
-
+                
                 togglePanel(null);
-
+                
                 document.getElementById('showGeneralMapBtn').classList.add('active');
             });
 
@@ -1299,7 +1305,6 @@ socket.on('prayerTimesData', (data) => {
         const { Fajr, Dhuhr, Asr, Maghrib, Isha } = data.timings;
         displayElement.innerHTML = `<p><strong>الفجر:</strong> ${Fajr}</p><p><strong>الظهر:</strong> ${Dhuhr}</p><p><strong>العصر:</strong> ${Asr}</p><p><strong>المغرب:</strong> ${Maghrib}</p><p><strong>العشاء:</strong> ${Isha}</p>`;
         
-        // التحقق من وقت الصلاة الحالي وتشغيل التنبيه
         checkPrayerTime(Fajr);
         checkPrayerTime(Dhuhr);
         checkPrayerTime(Asr);
