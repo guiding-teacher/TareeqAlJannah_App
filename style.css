@@ -24,6 +24,17 @@ body {
     height: 100vh;
 }
 
+
+.bottom-chat-bar {
+    display: none; /* سيتم تغييره إلى flex عند التفعيل */
+    /* باقي الأنماط الحالية */
+}
+
+.bottom-chat-bar.active {
+    display: flex;
+}
+
+
 .main-header {
     background-image: linear-gradient(to right, #0056b3, var(--primary-color));
     color: white;
