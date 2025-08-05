@@ -31,6 +31,7 @@ let moazebConnectionLayerId = null;
 let proximityAlertPlayed = false;
 let prayerAlertPlayed = false;
 let lastPrayerTime = '';
+let linkRequestInitiated = false; // *** التعديل: إضافة متغير الحالة (Flag)
 
 // المواقع الرئيسية في العراق
 const holySites = [];
@@ -1015,32 +1016,14 @@ socket.on('locationUpdate', (data) => {
     }
 });
 
-// =================================================================================
-// *** بداية التعديل: معالجة مشكلة الربط بين الأصدقاء ***
+
 socket.on('linkStatus', (data) => {
     alert(data.message);
-    if (data.success) {
-        // الخطوة 1: إغلاق لوحة الربط
-        togglePanel(null);
-
-        // الخطوة 2: تنشيط زر "خريطة الأصدقاء" برمجياً ولكن بدون النقر عليه
-        // هذا يضمن أنه عند وصول حدث 'updateFriendsList' التالي،
-        // سيتم استدعاء showFriendsMap() تلقائياً لتحديث الخريطة بالبيانات الصحيحة.
-        document.querySelectorAll('.main-header nav button').forEach(btn => btn.classList.remove('active'));
-        const friendsMapBtn = document.getElementById('showFriendsMapBtn');
-        if (friendsMapBtn) {
-            friendsMapBtn.classList.add('active');
-        }
-
-        // ملاحظة: لا نستدعي showFriendsMap() أو setupBottomChatBar() هنا مباشرة.
-        // نعتمد على حدث 'updateFriendsList' الذي سيصل من الخادم قريباً للقيام بذلك،
-        // مما يمنع حدوث حالة سباق (race condition) ويضمن أن البيانات محدثة تماماً.
-        // هذا يصلح مشكلة عدم ظهور الصديق والخط وشريط الدردشة إلا بعد التحديث.
+    // *** التعديل: عند فشل الربط، نعيد الحالة إلى طبيعتها ***
+    if (!data.success) {
+        linkRequestInitiated = false;
     }
 });
-// *** نهاية التعديل ***
-// =================================================================================
-
 
 socket.on('unfriendStatus', (data) => {
     alert(data.message);
@@ -1051,19 +1034,28 @@ socket.on('unfriendStatus', (data) => {
 });
 
 socket.on('updateFriendsList', (friendsData) => {
-    linkedFriends = friendsData;
-    // إذا كانت خريطة الأصدقاء هي النشطة، قم بإعادة رسمها بالبيانات الجديدة
-    if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
-        showFriendsMap();
+    // *** بداية التعديل: منطق معالجة الربط الجديد ***
+    const isNewFriendAdded = friendsData.length > linkedFriends.length;
+    linkedFriends = friendsData; // تحديث البيانات هو أول خطوة دائمًا
+
+    // هل هذا التحديث ناتج عن طلب ربط بدأناه نحن؟
+    if (linkRequestInitiated && isNewFriendAdded) {
+        // نعم! الآن بعد أن وصلت البيانات الجديدة، يمكننا تحديث الواجهة بأمان
+        document.getElementById('showFriendsMapBtn').click(); // انقر على زر الأصدقاء لعرض الخريطة المحدثة
+        linkRequestInitiated = false; // أعد تعيين الحالة لاستعداد لعملية ربط قادمة
+    } else {
+        // هذا تحديث عادي (صديق آخر ربطنا، أو قطعنا الاتصال، الخ)
+        // قم بتحديث الخريطة فقط إذا كانت مفتوحة بالفعل
+        if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
+            showFriendsMap();
+        }
     }
-    // تحديث شريط الدردشة السفلي (سيظهر الآن بشكل صحيح بعد الربط)
+
+    // قم بتحديث باقي عناصر الواجهة التي تعتمد على قائمة الأصدقاء
     setupBottomChatBar();
-    // تحديث قائمة الأصدقاء في لوحة الربط إذا كانت مفتوحة
-    if (document.getElementById('connectPanel').classList.contains('active')) {
-        updateFriendsPanelList();
-    }
-    // تحديث قائمة حالة البطارية
+    updateFriendsPanelList();
     updateFriendBatteryStatus();
+    // *** نهاية التعديل ***
 });
 
 socket.on('newChatMessage', (data) => {
@@ -1450,6 +1442,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (friendCode) {
+            // *** التعديل: تفعيل متغير الحالة قبل إرسال الطلب ***
+            linkRequestInitiated = true; 
             socket.emit('requestLink', { friendCode: friendCode });
             if (friendCodeInput) friendCodeInput.value = '';
         } else {
