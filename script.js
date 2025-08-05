@@ -464,25 +464,6 @@ function showFriendsMap() {
         }
     });
 
-    // إضافة هذا الجزء لتقريب الخريطة على الأصدقاء المرتبطين
-    if (currentUser && currentUser.location && currentUser.location.coordinates) {
-        const allVisibleCoords = [currentUser.location.coordinates];
-        
-        linkedFriends.forEach(f => {
-            if (f.location && f.location.coordinates && f.settings.shareLocation && !f.settings.stealthMode) {
-                allVisibleCoords.push(f.location.coordinates);
-                drawConnectionLine(currentUser.location.coordinates, f.location.coordinates, `line-${currentUser.userId}-${f.userId}`);
-            }
-        });
-
-        if (allVisibleCoords.length > 1) {
-            const bounds = new mapboxgl.LngLatBounds();
-            allVisibleCoords.forEach(coord => bounds.extend(coord));
-            map.fitBounds(bounds, { padding: 80, pitch: 45, bearing: -17.6 });
-        }
-    }
-}
-
     // عرض نقاط التجمع للأصدقاء المرتبطين
     linkedFriends.forEach(friend => {
         if (friend.meetingPoint && friend.meetingPoint.location && friend.meetingPoint.location.coordinates) {
@@ -1039,13 +1020,11 @@ socket.on('locationUpdate', (data) => {
     }
 });
 
- socket.on('linkStatus', (data) => {
+socket.on('linkStatus', (data) => {
     alert(data.message);
     if (data.success) {
         togglePanel(null);
         document.getElementById('showFriendsMapBtn').click();
-        // إضافة هذا السطر لتحديث قائمة الأصدقاء
-        socket.emit('requestFriendsData', { friendIds: currentUser.linkedFriends });
     }
 });
 
