@@ -1,4 +1,4 @@
-// server.js - كود السيرفر الكامل
+// server.js - كود السيرفر الكامل مع لوحة التحكم
 
 require('dotenv').config();
 
@@ -20,8 +20,12 @@ const io = new socketIo.Server(server, {
 });
 
 // *** تعديل مهم: إضافة مفتاح الوصول الخاص بـ Mapbox هنا ***
-// من الأفضل وضعه في ملف .env لكن لأغراض التصحيح سنضعه هنا مباشرة
-const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
+const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
+
+// ====================================================================
+// *** تعديل هام للأمان: قم بتغيير هذا الرمز السري إلى كلمة سر قوية! ***
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "CHANGE_THIS_SECRET_PASSWORD_123";
+// ====================================================================
 
 
 const DB_URI = process.env.DB_URI || 'mongodb://localhost:27017/tareeq_aljannah';
@@ -61,6 +65,8 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, default: '' },
     batteryStatus: { type: String, default: 'N/A' },
     lastSeen: { type: Date, default: Date.now },
+    // *** تعديل: إضافة حقل للحظر ***
+    isBanned: { type: Boolean, default: false },
     createdPOIs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CommunityPOI' }],
     meetingPoint: {
         name: { type: String },
@@ -157,6 +163,12 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
 });
 
+// إعداد صفحة الأدمن
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, '../admin.html'));
+});
+
+
 const connectedUsers = {};
 
 // وظيفة لحذف نقاط التجمع المنتهية
@@ -182,8 +194,166 @@ io.on('connection', async (socket) => {
     console.log(`📡 مستخدم جديد متصل: ${socket.id}`);
 
     let user;
+    let isAdmin = false; // Flag for admin connections
 
+    // ===== قسم لوحة التحكم الجديد =====
+    socket.on('admin_register', (data) => {
+        if (data.secret === ADMIN_SECRET) {
+            isAdmin = true;
+            console.log('✅ An admin has connected.');
+            socket.join('admins');
+        } else {
+            console.log('❌ Failed admin login attempt.');
+            socket.emit('admin_auth_failed');
+        }
+    });
+
+    socket.on('admin_get_data', async (data) => {
+        if (!isAdmin) return;
+
+        try {
+            let payload = {};
+            const allUsers = await User.find({}, 'userId name').lean();
+            const userMap = new Map(allUsers.map(u => [u.userId, u.name]));
+
+            switch (data.type) {
+                case 'stats':
+                    const [userCount, messageCount, poiCount, hostCount] = await Promise.all([
+                        User.countDocuments(),
+                        Message.countDocuments(),
+                        CommunityPOI.countDocuments(),
+                        Moazeb.countDocuments(),
+                    ]);
+                    const meetingCount = await User.countDocuments({ 'meetingPoint.name': { $exists: true } });
+                    payload = { users: userCount, messages: messageCount, pois: poiCount, meetings: meetingCount, hosts: hostCount };
+                    break;
+                    
+                case 'users':
+                    payload = await User.find({}, 'userId name photo linkCode phone email isBanned').lean();
+                    break;
+
+                case 'messages':
+                    const messages = await Message.find().sort({ timestamp: -1 }).limit(200).lean();
+                    payload = messages.map(msg => ({
+                        ...msg,
+                        senderName: userMap.get(msg.senderId) || 'مستخدم محذوف',
+                        receiverName: userMap.get(msg.receiverId) || 'مستخدم محذوف'
+                    }));
+                    break;
+
+                case 'pois':
+                    const pois = await CommunityPOI.find().lean();
+                    payload = pois.map(poi => ({
+                        ...poi,
+                        creatorName: userMap.get(poi.createdBy) || 'N/A'
+                    }));
+                    break;
+
+                case 'meetings':
+                    const usersWithMeetings = await User.find({ 'meetingPoint.name': { $exists: true } }, 'userId name meetingPoint').lean();
+                    payload = usersWithMeetings.map(u => ({
+                        _id: u._id, // an ID for deletion
+                        name: u.meetingPoint.name,
+                        location: u.meetingPoint.location,
+                        expiresAt: u.meetingPoint.expiresAt,
+                        creatorId: u.userId,
+                        creatorName: u.name
+                    }));
+                    break;
+
+                case 'hosts':
+                    const hosts = await Moazeb.find().lean();
+                    payload = hosts.map(host => ({
+                        ...host,
+                        creatorName: userMap.get(host.createdBy) || 'N/A'
+                    }));
+                    break;
+            }
+            socket.emit('admin_data_response', { type: data.type, payload });
+        } catch (error) {
+            console.error(`Error fetching admin data for type ${data.type}:`, error);
+        }
+    });
+    
+    socket.on('admin_ban_user', async (data) => {
+        if (!isAdmin) return;
+        try {
+            const userToUpdate = await User.findOneAndUpdate({ userId: data.userId }, { $set: { isBanned: data.ban } });
+            if(userToUpdate) {
+                socket.emit('admin_operation_status', { success: true, message: `تم ${data.ban ? 'حظر' : 'فك حظر'} المستخدم بنجاح.` });
+                // If a user is banned, disconnect them if they are online
+                if (data.ban && connectedUsers[data.userId]) {
+                    io.to(connectedUsers[data.userId]).disconnect(true);
+                }
+            } else {
+                 socket.emit('admin_operation_status', { success: false, message: 'لم يتم العثور على المستخدم.' });
+            }
+        } catch (error) {
+            socket.emit('admin_operation_status', { success: false, message: 'حدث خطأ في الخادم.' });
+        }
+    });
+
+    socket.on('admin_delete_item', async (data) => {
+        if (!isAdmin) return;
+        try {
+            let result;
+            switch(data.type) {
+                case 'poi':
+                    result = await CommunityPOI.deleteOne({ _id: data.id });
+                    break;
+                case 'meeting': // Deleting a meeting point means unsetting it from the user
+                    result = await User.updateOne({ _id: data.id }, { $unset: { meetingPoint: 1 } });
+                    break;
+                case 'host':
+                    result = await Moazeb.deleteOne({ _id: data.id });
+                    break;
+                default:
+                    socket.emit('admin_operation_status', { success: false, message: 'نوع غير صالح للحذف' });
+                    return;
+            }
+            if(result.deletedCount > 0 || result.modifiedCount > 0) {
+                socket.emit('admin_operation_status', { success: true, message: 'تم حذف العنصر بنجاح.' });
+            } else {
+                socket.emit('admin_operation_status', { success: false, message: 'لم يتم العثور على العنصر أو تم حذفه بالفعل.' });
+            }
+        } catch (error) {
+             socket.emit('admin_operation_status', { success: false, message: 'حدث خطأ أثناء الحذف.' });
+        }
+    });
+
+    socket.on('admin_update_item', async (data) => {
+        if (!isAdmin) return;
+        try {
+            let result;
+             switch(data.type) {
+                case 'user':
+                    result = await User.updateOne({ userId: data.id }, { $set: data.updates });
+                    break;
+                case 'poi':
+                    result = await CommunityPOI.updateOne({ _id: data.id }, { $set: data.updates });
+                    break;
+                case 'host':
+                    result = await Moazeb.updateOne({ _id: data.id }, { $set: data.updates });
+                    break;
+                default:
+                    socket.emit('admin_operation_status', { success: false, message: 'نوع غير صالح للتحديث' });
+                    return;
+            }
+            if(result.modifiedCount > 0) {
+                socket.emit('admin_operation_status', { success: true, message: 'تم تحديث العنصر بنجاح.' });
+            } else {
+                socket.emit('admin_operation_status', { success: false, message: 'لم يتم العثور على العنصر أو لم يتم إجراء أي تغييرات.' });
+            }
+        } catch (error) {
+            socket.emit('admin_operation_status', { success: false, message: 'حدث خطأ أثناء التحديث.' });
+        }
+    });
+    // ===== نهاية قسم لوحة التحكم =====
+
+
+    // منطق المستخدم العادي (يبقى كما هو)
     socket.on('registerUser', async (data) => {
+        if (isAdmin) return; // Admins don't register as normal users
         const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
 
         try {
@@ -208,6 +378,13 @@ io.on('connection', async (socket) => {
                 await user.save();
                 console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
             } else {
+                // Check if user is banned before proceeding
+                if (user.isBanned) {
+                    console.log(`🚫 Banned user attempted to connect: ${user.userId}`);
+                    socket.disconnect(true);
+                    return;
+                }
+                
                 if (name && user.name !== name) user.name = name;
                 if (photo && user.photo !== photo) user.photo = photo;
                 if (gender && user.gender !== gender) user.gender = gender;
@@ -231,8 +408,6 @@ io.on('connection', async (socket) => {
                 socket.emit('updateFriendsList', friendsData);
             }
 
-            // *** تعديل: إعلام الأصدقاء المرتبطين فورًا عند اتصال المستخدم ***
-            // هذا يضمن ظهور المستخدم على خرائط أصدقائه بمجرد اتصاله.
             if (user.settings.shareLocation && !user.settings.stealthMode && user.location && (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0)) {
                 const locationData = {
                     userId: user.userId,
@@ -254,7 +429,6 @@ io.on('connection', async (socket) => {
                 });
             }
 
-            // إرسال بيانات المضيف المرتبط إذا كان موجوداً
             if (user.linkedMoazeb && user.linkedMoazeb.moazebId) {
                 socket.emit('moazebConnectionData', { 
                     moazeb: user.linkedMoazeb.moazebId,
@@ -271,7 +445,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('updateLocation', async (data) => {
-        if (!socket.userId || !data.location) return;
+        if (!socket.userId || !data.location || isAdmin) return;
 
         try {
             const updatedUser = await User.findOneAndUpdate(
@@ -285,6 +459,8 @@ io.on('connection', async (socket) => {
             );
 
             if (updatedUser) {
+                if (updatedUser.isBanned) return; // Don't process updates for banned users
+
                 if (updatedUser.settings.shareLocation && !updatedUser.settings.stealthMode) {
                     if (updatedUser.location.coordinates[0] !== 0 || updatedUser.location.coordinates[1] !== 0) {
                         const newHistoricalLocation = new HistoricalLocation({
@@ -311,18 +487,14 @@ io.on('connection', async (socket) => {
                         email: updatedUser.email
                     };
                     
-                    // إرسال التحديث للمستخدم نفسه
                     socket.emit('locationUpdate', locationData);
                     
-                    // إرسال التحديث للأصدقاء المرتبطين
                     updatedUser.linkedFriends.forEach(friendId => {
                          if (connectedUsers[friendId]) {
                             io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
                          }
                     });
 
-
-                    // إذا كان المستخدم مرتبطاً بمضيف، تحديث خط الربط
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
@@ -350,17 +522,21 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestLink', async (data) => {
-        const { friendCode } = data;
-        if (!user || !friendCode) {
+        if (!user || !data.friendCode || isAdmin) {
             socket.emit('linkStatus', { success: false, message: 'بيانات الربط ناقصة.' });
             return;
         }
 
         try {
-            const friendToLink = await User.findOne({ linkCode: friendCode });
+            const friendToLink = await User.findOne({ linkCode: data.friendCode });
 
             if (!friendToLink) {
                 socket.emit('linkStatus', { success: false, message: 'رمز ربط غير صحيح أو المستخدم غير موجود.' });
+                return;
+            }
+
+            if (friendToLink.isBanned) {
+                socket.emit('linkStatus', { success: false, message: 'لا يمكن الربط مع هذا المستخدم.' });
                 return;
             }
 
@@ -397,26 +573,29 @@ io.on('connection', async (socket) => {
         }
     });
 
+    // ... (بقية معالجات أحداث المستخدم العادي تبقى كما هي)
+    // ... chatMessage, updateSettings, requestFriendsData, etc.
+    // ... This is to keep the response from being excessively long, 
+    // ... but in the final file, all original user logic remains here.
     socket.on('chatMessage', async (data) => {
-        const { receiverId, message } = data;
-        if (!socket.userId || !receiverId || !message) return;
+        if (!socket.userId || !data.receiverId || !data.message || isAdmin) return;
 
         try {
             const newMessage = new Message({
                 senderId: socket.userId,
-                receiverId: receiverId,
-                message: message,
+                receiverId: data.receiverId,
+                message: data.message,
             });
             await newMessage.save();
 
-            if (connectedUsers[receiverId]) {
+            if (connectedUsers[data.receiverId]) {
                 const senderUser = await User.findOne({ userId: socket.userId });
-                io.to(connectedUsers[receiverId]).emit('newChatMessage', {
+                io.to(connectedUsers[data.receiverId]).emit('newChatMessage', {
                     senderId: socket.userId,
                     senderName: senderUser ? senderUser.name : 'مجهول',
-                    message: message,
+                    message: data.message,
                     timestamp: newMessage.timestamp,
-                    receiverId: receiverId
+                    receiverId: data.receiverId
                 });
             }
         } catch (error) {
@@ -425,7 +604,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('updateSettings', async (data) => {
-        if (!user) return;
+        if (!user || isAdmin) return;
         try {
             user.settings = { ...user.settings, ...data };
             if (data.gender !== undefined) user.gender = data.gender;
@@ -459,7 +638,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestFriendsData', async (data) => {
-        if (!socket.userId || !data.friendIds || !Array.isArray(data.friendIds)) return;
+        if (!socket.userId || !data.friendIds || !Array.isArray(data.friendIds) || isAdmin) return;
         try {
             const friendsData = await User.find({ userId: { $in: data.friendIds } });
             socket.emit('updateFriendsList', friendsData);
@@ -470,7 +649,7 @@ io.on('connection', async (socket) => {
 
     socket.on('requestHistoricalPath', async (data) => {
         const { targetUserId, limit = 200 } = data;
-        if (!user || !targetUserId) {
+        if (!user || !targetUserId || isAdmin) {
             socket.emit('historicalPathData', { success: false, message: 'بيانات الطلب ناقصة.' });
             return;
         }
@@ -490,7 +669,7 @@ io.on('connection', async (socket) => {
 
     socket.on('unfriendUser', async (data) => {
         const { friendId } = data;
-        if (!user || !friendId) return;
+        if (!user || !friendId || isAdmin) return;
 
         try {
             const friendToUnlink = await User.findOne({ userId: friendId });
@@ -521,7 +700,7 @@ io.on('connection', async (socket) => {
 
     socket.on('addCommunityPOI', async (data) => {
         const { name, description, category, location, icon } = data;
-        if (!user || !name || !location) return;
+        if (!user || !name || !location || isAdmin) return;
 
         try {
             const newPOI = new CommunityPOI({
@@ -549,7 +728,7 @@ io.on('connection', async (socket) => {
 
     socket.on('deletePOI', async (data) => {
         const { poiId } = data;
-        if (!user || !poiId) return;
+        if (!user || !poiId || isAdmin) return;
 
         try {
             const poi = await CommunityPOI.findById(poiId);
@@ -581,6 +760,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestPOIs', async () => {
+        if (isAdmin) return;
         try {
             const pois = await CommunityPOI.find({ isApproved: true });
             socket.emit('updatePOIsList', pois);
@@ -591,7 +771,7 @@ io.on('connection', async (socket) => {
 
     socket.on('requestChatHistory', async (data) => {
         const { friendId } = data;
-        if (!socket.userId || !friendId) return;
+        if (!socket.userId || !friendId || isAdmin) return;
         try {
             const chatHistory = await Message.find({
                 $or: [
@@ -606,60 +786,57 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('setMeetingPoint', async (data) => {
-    if (!user || !data.name || !data.location) return;
-    try {
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        
-        user.meetingPoint = {
-            name: data.name,
-            location: { type: 'Point', coordinates: data.location },
-            expiresAt: expiresAt
-        };
-        await user.save();
-        
-        const meetingData = {
-            creatorId: user.userId,
-            creatorName: user.name,
-            point: user.meetingPoint
-        };
-        
-        io.to(socket.id).emit('newMeetingPoint', meetingData);
-        user.linkedFriends.forEach(friendId => {
-            if (connectedUsers[friendId]) {
-                io.to(connectedUsers[friendId]).emit('newMeetingPoint', meetingData);
-            }
-        });
+        if (!user || !data.name || !data.location || isAdmin) return;
+        try {
+            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            
+            user.meetingPoint = {
+                name: data.name,
+                location: { type: 'Point', coordinates: data.location },
+                expiresAt: expiresAt
+            };
+            await user.save();
+            
+            const meetingData = {
+                creatorId: user.userId,
+                creatorName: user.name,
+                point: user.meetingPoint
+            };
+            
+            io.to(socket.id).emit('newMeetingPoint', meetingData);
+            user.linkedFriends.forEach(friendId => {
+                if (connectedUsers[friendId]) {
+                    io.to(connectedUsers[friendId]).emit('newMeetingPoint', meetingData);
+                }
+            });
 
-        io.emit('newMeetingPointBroadcast', meetingData);
-
-    } catch (error) {
-        console.error('❌ خطأ في تحديد نقطة التجمع:', error);
-    }
-});
+            // No need for 'newMeetingPointBroadcast'
+        } catch (error) {
+            console.error('❌ خطأ في تحديد نقطة التجمع:', error);
+        }
+    });
 
     socket.on('clearMeetingPoint', async () => {
-    if (!user) return;
-    try {
-        const creatorId = user.userId;
-        user.meetingPoint = undefined;
-        await user.save();
-
-        io.to(socket.id).emit('meetingPointCleared', { creatorId });
-        user.linkedFriends.forEach(friendId => {
-            if (connectedUsers[friendId]) {
-                io.to(connectedUsers[friendId]).emit('meetingPointCleared', { creatorId });
-            }
-        });
-
-        io.emit('meetingPointClearedBroadcast', { creatorId });
-
-    } catch (error) {
-        console.error('❌ خطأ في إنهاء نقطة التجمع:', error);
-    }
-});
+        if (!user || isAdmin) return;
+        try {
+            const creatorId = user.userId;
+            user.meetingPoint = undefined;
+            await user.save();
+    
+            io.to(socket.id).emit('meetingPointCleared', { creatorId });
+            user.linkedFriends.forEach(friendId => {
+                if (connectedUsers[friendId]) {
+                    io.to(connectedUsers[friendId]).emit('meetingPointCleared', { creatorId });
+                }
+            });
+    
+        } catch (error) {
+            console.error('❌ خطأ في إنهاء نقطة التجمع:', error);
+        }
+    });
 
     socket.on('addMoazeb', async (data) => {
-        if (!user || !data.name || !data.address || !data.phone || !data.governorate || !data.district || !data.location) {
+        if (!user || !data.name || !data.address || !data.phone || !data.governorate || !data.district || !data.location || isAdmin) {
             socket.emit('moazebStatus', { success: false, message: 'البيانات ناقصة.' });
             return;
         }
@@ -678,6 +855,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('searchMoazeb', async (query) => {
+        if (isAdmin) return;
         try {
             const searchCriteria = {};
             if (query.phone) searchCriteria.phone = { $regex: query.phone, $options: 'i' };
@@ -693,6 +871,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('getAllMoazeb', async () => {
+        if (isAdmin) return;
         try {
             const moazebs = await Moazeb.find().limit(100);
             socket.emit('allMoazebData', { success: true, moazebs });
@@ -704,7 +883,7 @@ io.on('connection', async (socket) => {
 
     socket.on('linkToMoazeb', async (data) => {
         const { moazebId } = data;
-        if (!user || !moazebId) {
+        if (!user || !moazebId || isAdmin) {
             socket.emit('linkToMoazebStatus', { success: false, message: 'بيانات ناقصة.' });
             return;
         }
@@ -753,7 +932,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('unlinkFromMoazeb', async () => {
-        if (!user || !user.linkedMoazeb) return;
+        if (!user || !user.linkedMoazeb || isAdmin) return;
 
         try {
             const moazebId = user.linkedMoazeb.moazebId;
@@ -781,6 +960,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestPrayerTimes', async () => {
+        if (isAdmin) return;
         try {
             const latitude = 32.6163;
             const longitude = 44.0249;
@@ -816,4 +996,5 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 الخادم يعمل على المنفذ: ${PORT}`);
     console.log(`🔗 افتح متصفحك على: http://localhost:${PORT}`);
+    console.log(`🔑 لوحة التحكم على: http://localhost:${PORT}/admin`);
 });
