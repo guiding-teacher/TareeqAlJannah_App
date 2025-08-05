@@ -878,6 +878,32 @@ function setupMapControls() {
     document.getElementById('map').appendChild(controlsDiv);
 }
 
+// *** تعديل: إضافة دالة لتحديث قائمة الأصدقاء في اللوحة الخاصة بها ***
+function updateFriendsPanelList() {
+    const friendsListEl = document.getElementById('friendsList');
+    if (!friendsListEl) return;
+    
+    friendsListEl.innerHTML = '';
+    if (linkedFriends.length > 0) {
+        linkedFriends.forEach(friend => {
+            const li = document.createElement('li');
+            li.innerHTML = `<img src="${friend.photo}" style="width:30px; height:30px; border-radius:50%;"> <span>${friend.name}</span> <span style="margin-right: auto; font-size: 0.9em; color: #666;">${friend.batteryStatus || 'N/A'}</span> <button class="unfriend-in-list-btn" data-friend-id="${friend.userId}"><i class="fas fa-user-minus"></i></button>`;
+            friendsListEl.appendChild(li);
+        });
+        document.querySelectorAll('.unfriend-in-list-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const friendIdToUnlink = e.currentTarget.dataset.friendId;
+                const friendName = linkedFriends.find(f => f.userId === friendIdToUnlink)?.name || 'هذا الصديق';
+                if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friendName}؟`)) {
+                    socket.emit('unfriendUser', { friendId: friendIdToUnlink });
+                }
+            });
+        });
+    } else {
+        friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
+    }
+}
+
 // التعامل مع أحداث WebSocket من الخادم
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId');
@@ -936,6 +962,7 @@ socket.on('currentUserData', (user) => {
     }
 });
 
+// *** تعديل: إعادة كتابة معالج حدث تحديث الموقع لضمان عمل خريطة الأصدقاء بشكل صحيح ***
 socket.on('locationUpdate', (data) => {
     let userToUpdate;
     if (currentUser && data.userId === currentUser.userId) {
@@ -945,27 +972,47 @@ socket.on('locationUpdate', (data) => {
     }
 
     if (userToUpdate) {
+        // 1. تحديث بيانات المستخدم في الذاكرة أولاً
         Object.assign(userToUpdate, data);
         userToUpdate.location = { type: 'Point', coordinates: data.location };
-        
-        const marker = friendMarkers[userToUpdate.userId];
-        const isFriendsMapActive = document.getElementById('showFriendsMapBtn').classList.contains('active');
-        const shouldBeVisible = userToUpdate.settings.shareLocation && !userToUpdate.settings.stealthMode;
 
-        if (isFriendsMapActive && shouldBeVisible) {
-            if (marker) {
-                marker.setLngLat(userToUpdate.location.coordinates);
+        // 2. التحقق مما إذا كانت خريطة الأصدقاء نشطة لتحديث الواجهة
+        const isFriendsMapActive = document.getElementById('showFriendsMapBtn').classList.contains('active');
+        if (isFriendsMapActive) {
+            if (data.userId === currentUser.userId) {
+                // إذا تحرك المستخدم الحالي، أعد رسم الخريطة بالكامل
+                // هذا يضمن تحديث جميع الخطوط والتركيز على مواقع الأصدقاء بشكل صحيح
+                showFriendsMap();
             } else {
-                createCustomMarker(userToUpdate);
-            }
-        } else {
-            if (marker) {
-                marker.remove();
-                delete friendMarkers[userToUpdate.userId];
+                // إذا تحرك صديق، قم بتحديث محدد الموقع والخط الخاص به فقط
+                const marker = friendMarkers[userToUpdate.userId];
+                const shouldBeVisible = userToUpdate.settings.shareLocation && !userToUpdate.settings.stealthMode;
+
+                if (shouldBeVisible) {
+                    if (marker) {
+                        marker.setLngLat(userToUpdate.location.coordinates);
+                    } else {
+                        createCustomMarker(userToUpdate);
+                    }
+                    const currentUserIsVisible = currentUser.settings.shareLocation && !currentUser.settings.stealthMode;
+                    if (currentUserIsVisible && currentUser.location && currentUser.location.coordinates) {
+                        drawConnectionLine(currentUser.location.coordinates, userToUpdate.location.coordinates, `line-${currentUser.userId}-${userToUpdate.userId}`);
+                    }
+                } else {
+                    if (marker) {
+                        marker.remove();
+                        delete friendMarkers[userToUpdate.userId];
+                    }
+                    const layerId = `line-${currentUser.userId}-${userToUpdate.userId}`;
+                    if(map.getLayer(layerId)) {
+                        map.removeLayer(layerId);
+                        map.removeSource(layerId);
+                    }
+                }
             }
         }
-        
-        // التحقق من القرب وإصدار صوت تنبيه
+
+        // 3. التحقق من القرب، بغض النظر عن الخريطة النشطة
         if (currentUser && currentUser.location && currentUser.location.coordinates && 
             userToUpdate.userId !== currentUser.userId && 
             userToUpdate.location && userToUpdate.location.coordinates) {
@@ -979,15 +1026,9 @@ socket.on('locationUpdate', (data) => {
                 playProximitySound();
             }
         }
-
-        if (isFriendsMapActive && currentUser && currentUser.userId !== userToUpdate.userId && shouldBeVisible) {
-             const currentUserIsVisible = currentUser.settings.shareLocation && !currentUser.settings.stealthMode;
-             if (currentUserIsVisible && currentUser.location && currentUser.location.coordinates) {
-                  drawConnectionLine(currentUser.location.coordinates, userToUpdate.location.coordinates, `line-${currentUser.userId}-${userToUpdate.userId}`);
-             }
-        }
     }
 });
+
 
 socket.on('linkStatus', (data) => {
     alert(data.message);
@@ -1005,6 +1046,7 @@ socket.on('unfriendStatus', (data) => {
     }
 });
 
+// *** تعديل: استخدام الدالة الجديدة لتحديث قائمة الأصدقاء ***
 socket.on('updateFriendsList', (friendsData) => {
     linkedFriends = friendsData;
     if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
@@ -1012,29 +1054,11 @@ socket.on('updateFriendsList', (friendsData) => {
     }
     setupBottomChatBar();
     if (document.getElementById('connectPanel').classList.contains('active')) {
-        const friendsListEl = document.getElementById('friendsList');
-        friendsListEl.innerHTML = '';
-        if (linkedFriends.length > 0) {
-            linkedFriends.forEach(friend => {
-                const li = document.createElement('li');
-                li.innerHTML = `<img src="${friend.photo}" style="width:30px; height:30px; border-radius:50%;"> <span>${friend.name}</span> <span style="margin-right: auto; font-size: 0.9em; color: #666;">${friend.batteryStatus || 'N/A'}</span> <button class="unfriend-in-list-btn" data-friend-id="${friend.userId}"><i class="fas fa-user-minus"></i></button>`;
-                friendsListEl.appendChild(li);
-            });
-            document.querySelectorAll('.unfriend-in-list-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const friendIdToUnlink = e.currentTarget.dataset.friendId;
-                    const friendName = linkedFriends.find(f => f.userId === friendIdToUnlink)?.name || 'هذا الصديق';
-                    if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friendName}؟`)) {
-                        socket.emit('unfriendUser', { friendId: friendIdToUnlink });
-                    }
-                });
-            });
-        } else {
-            friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
-        }
+        updateFriendsPanelList();
     }
     updateFriendBatteryStatus();
 });
+
 
 socket.on('newChatMessage', (data) => {
     if (currentUser && data.receiverId === currentUser.userId) {
@@ -1408,12 +1432,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // *** تعديل: إضافة استدعاء الدالة عند فتح لوحة الربط لضمان عرض القائمة فوراً ***
     document.getElementById('showConnectBtn').addEventListener('click', () => {
         if (!currentUser) {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
             return;
         }
         togglePanel('connectPanel');
+        updateFriendsPanelList();
     });
 
     document.getElementById('connectFriendBtn').addEventListener('click', () => {
