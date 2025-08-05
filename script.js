@@ -880,8 +880,6 @@ function setupMapControls() {
     document.getElementById('map').appendChild(controlsDiv);
 }
 
-// ==================================================================
-// *** السطر 1068: تم إضافة الدالة المطلوبة هنا ***
 // دالة لتحديث قائمة الأصدقاء في لوحة الربط
 function updateFriendsPanelList() {
     const friendsListEl = document.getElementById('friendsList');
@@ -907,7 +905,6 @@ function updateFriendsPanelList() {
         friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
     }
 }
-// ==================================================================
 
 // التعامل مع أحداث WebSocket من الخادم
 socket.on('connect', () => {
@@ -1023,8 +1020,9 @@ socket.on('locationUpdate', (data) => {
 socket.on('linkStatus', (data) => {
     alert(data.message);
     if (data.success) {
+        // نغلق أي لوحة مفتوحة. سيتم تحديث الخريطة وشريط الدردشة
+        // تلقائياً عند وصول حدث 'updateFriendsList'.
         togglePanel(null);
-        document.getElementById('showFriendsMapBtn').click();
     }
 });
 
@@ -1032,22 +1030,35 @@ socket.on('unfriendStatus', (data) => {
     alert(data.message);
     if (data.success) {
         socket.emit('registerUser', { userId: currentUser.userId });
-        document.getElementById('showFriendsMapBtn').click();
     }
 });
 
+// =================================================================================
+// ============== تعديل جوهري: هذا هو الجزء الأهم في الإصلاح ========================
+// =================================================================================
 socket.on('updateFriendsList', (friendsData) => {
     linkedFriends = friendsData;
-    if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
-        showFriendsMap();
-    }
+
+    // 1. تحديث الخريطة دائماً لإظهار الصديق الجديد والخط بينكما وتقريب المسافة.
+    // هذا يحل مشكلة عدم ظهور الصديق والخط المتقطع بعد الربط مباشرة.
+    showFriendsMap(); 
+
+    // 2. إعداد شريط الدردشة دائماً لضمان ظهوره بعد إضافة أول صديق أو تحديث القائمة.
+    // هذا يحل مشكلة اختفاء شريط الدردشة.
     setupBottomChatBar();
+
+    // 3. تحديث قائمة الأصدقاء في لوحة "الربط" إذا كانت مفتوحة.
     if (document.getElementById('connectPanel').classList.contains('active')) {
-        // *** السطر 1192: تم استبدال الكود المكرر باستدعاء الدالة ***
         updateFriendsPanelList();
     }
+    
+    // 4. تحديث حالة البطارية في لوحة "الميزات".
     updateFriendBatteryStatus();
 });
+// =================================================================================
+// ========================= نهاية التعديل الجوهري ================================
+// =================================================================================
+
 
 socket.on('newChatMessage', (data) => {
     if (currentUser && data.receiverId === currentUser.userId) {
@@ -1195,12 +1206,10 @@ socket.on('moazebSearchResults', (data) => {
                     socket.emit('linkToMoazeb', { moazebId: moazeb._id });
                 }
             });
-
-            // *** تعديل: إضافة إغلاق النافذة عند تحديد الموقع ***
+            
             card.querySelector('.locate-moazeb-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 
-                // 1. توجيه الخريطة إلى موقع المعزب
                 map.flyTo({
                     center: moazeb.location.coordinates,
                     zoom: 15,
@@ -1208,10 +1217,8 @@ socket.on('moazebSearchResults', (data) => {
                     bearing: -17.6
                 });
 
-                // 2. إغلاق لوحة البحث
                 togglePanel(null);
 
-                // 3. تفعيل زر الخريطة العامة في الهيدر
                 document.getElementById('showGeneralMapBtn').classList.add('active');
             });
 
@@ -1427,7 +1434,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         togglePanel('connectPanel');
-        // *** السطر 1414: تمت إضافة استدعاء الدالة هنا لضمان تحديث القائمة عند فتح اللوحة ***
         updateFriendsPanelList();
     });
 
