@@ -33,7 +33,7 @@ mongoose.connect(DB_URI)
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    photo: { type: String, default: 'image/hussainiya_avatar.png' }, // *** تعديل: استخدام صورة حسينية كافتراضي
+    photo: { type: String, default: 'image/Picsart_25-08-03_16-47-02-591.png' }, // *** تعديل: استخدام الصورة المحلية كافتراضي
     linkCode: { type: String, unique: true, sparse: true },
     location: {
         type: {
@@ -193,7 +193,7 @@ io.on('connection', async (socket) => {
                 user = new User({
                     userId: userId,
                     name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
-                    photo: photo || 'image/hussainiya_avatar.png', // *** تعديل: استخدام صورة حسينية كافتراضي
+                    photo: photo || 'image/Picsart_25-08-03_16-47-02-591.png', // *** تعديل: استخدام الصورة المحلية كافتراضي
                     location: { type: 'Point', coordinates: [0, 0] },
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
                     settings: {
