@@ -441,7 +441,9 @@ function showGeneralMap() {
     });
 }
 
-function showFriendsMap() {
+
+
+ function showFriendsMap() {
     holySites.forEach(site => {
         if (site.marker) site.marker.remove();
     });
@@ -463,6 +465,25 @@ function showFriendsMap() {
             createCustomMarker(friend);
         }
     });
+
+    // إضافة هذا الجزء لتقريب الخريطة على الأصدقاء المرتبطين
+    if (currentUser && currentUser.location && currentUser.location.coordinates) {
+        const allVisibleCoords = [currentUser.location.coordinates];
+        
+        linkedFriends.forEach(f => {
+            if (f.location && f.location.coordinates && f.settings.shareLocation && !f.settings.stealthMode) {
+                allVisibleCoords.push(f.location.coordinates);
+                drawConnectionLine(currentUser.location.coordinates, f.location.coordinates, `line-${currentUser.userId}-${f.userId}`);
+            }
+        });
+
+        if (allVisibleCoords.length > 1) {
+            const bounds = new mapboxgl.LngLatBounds();
+            allVisibleCoords.forEach(coord => bounds.extend(coord));
+            map.fitBounds(bounds, { padding: 80, pitch: 45, bearing: -17.6 });
+        }
+    }
+}
 
     // عرض نقاط التجمع للأصدقاء المرتبطين
     linkedFriends.forEach(friend => {
@@ -775,6 +796,9 @@ function handleChatFriendChange(e) {
 function setupBottomChatBar() {
     const bottomChatBar = document.getElementById('bottomChatBar');
     const bottomChatFriendSelect = document.getElementById('bottomChatFriendSelect');
+    
+    bottomChatBar.style.display = 'flex'; // إضافة هذا السطر للتأكد من ظهور العنصر
+    
     if (linkedFriends.length > 0) {
         bottomChatFriendSelect.innerHTML = '';
         linkedFriends.forEach(friend => {
@@ -783,8 +807,9 @@ function setupBottomChatBar() {
             option.textContent = friend.name;
             bottomChatFriendSelect.appendChild(option);
         });
+        
         if (!currentChatFriendId || !linkedFriends.some(f => f.userId === currentChatFriendId)) {
-             currentChatFriendId = linkedFriends[0].userId;
+            currentChatFriendId = linkedFriends[0].userId;
         }
         bottomChatFriendSelect.value = currentChatFriendId;
         bottomChatBar.classList.add('active');
@@ -792,6 +817,7 @@ function setupBottomChatBar() {
         bottomChatBar.classList.remove('active');
         currentChatFriendId = null;
     }
+    
     bottomChatFriendSelect.removeEventListener('change', (e) => { currentChatFriendId = e.target.value; });
     bottomChatFriendSelect.addEventListener('change', (e) => { currentChatFriendId = e.target.value; });
 }
@@ -1025,6 +1051,8 @@ socket.on('linkStatus', (data) => {
     if (data.success) {
         togglePanel(null);
         document.getElementById('showFriendsMapBtn').click();
+        // إضافة هذا السطر لتحديث قائمة الأصدقاء
+        socket.emit('requestFriendsData', { friendIds: currentUser.linkedFriends });
     }
 });
 
