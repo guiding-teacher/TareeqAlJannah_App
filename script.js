@@ -31,7 +31,6 @@ let moazebConnectionLayerId = null;
 let proximityAlertPlayed = false;
 let prayerAlertPlayed = false;
 let lastPrayerTime = '';
-let linkRequestInitiated = false; // *** التعديل: إضافة متغير الحالة (Flag)
 
 // المواقع الرئيسية في العراق
 const holySites = [];
@@ -1017,46 +1016,50 @@ socket.on('locationUpdate', (data) => {
 });
 
 
+// =================================================================================
+// *** بداية الإصلاح النهائي: معالجة مشكلة الربط للمستخدم المبادر ***
 socket.on('linkStatus', (data) => {
     alert(data.message);
-    // *** التعديل: عند فشل الربط، نعيد الحالة إلى طبيعتها ***
-    if (!data.success) {
-        linkRequestInitiated = false;
+    if (data.success) {
+        // بدلاً من التعامل مع الواجهة بشكل جزئي، نقوم بتشغيل الإجراء الكامل
+        // الذي يقوم به المستخدم عند النقر على "أصدقائي".
+        // هذا يضمن تشغيل `showFriendsMap` و `setupBottomChatBar` بالبيانات المحدثة
+        // التي تكون قد وصلت بالفعل من حدث `updateFriendsList`.
+        const friendsButton = document.getElementById('showFriendsMapBtn');
+        if (friendsButton) {
+            friendsButton.click();
+        }
     }
 });
+// *** نهاية الإصلاح النهائي ***
+// =================================================================================
+
 
 socket.on('unfriendStatus', (data) => {
     alert(data.message);
     if (data.success) {
+        // نطلب تحديث بيانات المستخدم بالكامل لضمان إزالة الصديق من القوائم
         socket.emit('registerUser', { userId: currentUser.userId });
+        // وننتقل إلى خريطة الأصدقاء لرؤية التغيير
         document.getElementById('showFriendsMapBtn').click();
     }
 });
 
 socket.on('updateFriendsList', (friendsData) => {
-    // *** بداية التعديل: منطق معالجة الربط الجديد ***
-    const isNewFriendAdded = friendsData.length > linkedFriends.length;
-    linkedFriends = friendsData; // تحديث البيانات هو أول خطوة دائمًا
+    linkedFriends = friendsData;
 
-    // هل هذا التحديث ناتج عن طلب ربط بدأناه نحن؟
-    if (linkRequestInitiated && isNewFriendAdded) {
-        // نعم! الآن بعد أن وصلت البيانات الجديدة، يمكننا تحديث الواجهة بأمان
-        document.getElementById('showFriendsMapBtn').click(); // انقر على زر الأصدقاء لعرض الخريطة المحدثة
-        linkRequestInitiated = false; // أعد تعيين الحالة لاستعداد لعملية ربط قادمة
-    } else {
-        // هذا تحديث عادي (صديق آخر ربطنا، أو قطعنا الاتصال، الخ)
-        // قم بتحديث الخريطة فقط إذا كانت مفتوحة بالفعل
-        if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
-            showFriendsMap();
-        }
+    // نقوم بتحديث الواجهة بشكل عام عند وصول قائمة أصدقاء جديدة
+    // هذا يضمن التناسق في جميع الحالات
+    if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
+        showFriendsMap();
     }
-
-    // قم بتحديث باقي عناصر الواجهة التي تعتمد على قائمة الأصدقاء
     setupBottomChatBar();
-    updateFriendsPanelList();
+    if (document.getElementById('connectPanel').classList.contains('active')) {
+        updateFriendsPanelList();
+    }
     updateFriendBatteryStatus();
-    // *** نهاية التعديل ***
 });
+
 
 socket.on('newChatMessage', (data) => {
     if (currentUser && data.receiverId === currentUser.userId) {
@@ -1321,6 +1324,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showGeneralMap();
     });
 
+    // =================================================================================
+    // *** بداية التعديل: التأكد من أن زر "أصدقائي" يشغل جميع الوظائف اللازمة ***
     document.getElementById('showFriendsMapBtn').addEventListener('click', () => {
         if (!currentUser) {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
@@ -1328,8 +1333,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         togglePanel(null);
         document.getElementById('showFriendsMapBtn').classList.add('active');
+        // استدعاء كلا الدالتين يضمن تحديث الخريطة وشريط الدردشة معًا
         showFriendsMap();
+        setupBottomChatBar();
     });
+    // *** نهاية التعديل ***
+    // =================================================================================
     
     document.getElementById('showAllMoazebBtn').addEventListener('click', () => {
         showAllMoazebOnMap();
@@ -1442,8 +1451,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (friendCode) {
-            // *** التعديل: تفعيل متغير الحالة قبل إرسال الطلب ***
-            linkRequestInitiated = true; 
             socket.emit('requestLink', { friendCode: friendCode });
             if (friendCodeInput) friendCodeInput.value = '';
         } else {
