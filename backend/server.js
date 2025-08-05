@@ -37,7 +37,7 @@ mongoose.connect(DB_URI)
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    photo: { type: String, default: 'image/Picsart_25-08-03_16-47-02-591.png' },
+    photo: { type: String, default: 'image/husseini_avatar1.png' },
     linkCode: { type: String, unique: true, sparse: true },
     location: {
         type: {
