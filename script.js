@@ -878,6 +878,35 @@ function setupMapControls() {
     document.getElementById('map').appendChild(controlsDiv);
 }
 
+// ==================================================================
+// *** السطر 1068: تم إضافة الدالة المطلوبة هنا ***
+// دالة لتحديث قائمة الأصدقاء في لوحة الربط
+function updateFriendsPanelList() {
+    const friendsListEl = document.getElementById('friendsList');
+    if (!friendsListEl) return;
+    
+    friendsListEl.innerHTML = '';
+    if (linkedFriends.length > 0) {
+        linkedFriends.forEach(friend => {
+            const li = document.createElement('li');
+            li.innerHTML = `<img src="${friend.photo}" style="width:30px; height:30px; border-radius:50%;"> <span>${friend.name}</span> <span style="margin-right: auto; font-size: 0.9em; color: #666;">${friend.batteryStatus || 'N/A'}</span> <button class="unfriend-in-list-btn" data-friend-id="${friend.userId}"><i class="fas fa-user-minus"></i></button>`;
+            friendsListEl.appendChild(li);
+        });
+        document.querySelectorAll('.unfriend-in-list-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const friendIdToUnlink = e.currentTarget.dataset.friendId;
+                const friendName = linkedFriends.find(f => f.userId === friendIdToUnlink)?.name || 'هذا الصديق';
+                if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friendName}؟`)) {
+                    socket.emit('unfriendUser', { friendId: friendIdToUnlink });
+                }
+            });
+        });
+    } else {
+        friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
+    }
+}
+// ==================================================================
+
 // التعامل مع أحداث WebSocket من الخادم
 socket.on('connect', () => {
     let userId = localStorage.getItem('appUserId');
@@ -1012,26 +1041,8 @@ socket.on('updateFriendsList', (friendsData) => {
     }
     setupBottomChatBar();
     if (document.getElementById('connectPanel').classList.contains('active')) {
-        const friendsListEl = document.getElementById('friendsList');
-        friendsListEl.innerHTML = '';
-        if (linkedFriends.length > 0) {
-            linkedFriends.forEach(friend => {
-                const li = document.createElement('li');
-                li.innerHTML = `<img src="${friend.photo}" style="width:30px; height:30px; border-radius:50%;"> <span>${friend.name}</span> <span style="margin-right: auto; font-size: 0.9em; color: #666;">${friend.batteryStatus || 'N/A'}</span> <button class="unfriend-in-list-btn" data-friend-id="${friend.userId}"><i class="fas fa-user-minus"></i></button>`;
-                friendsListEl.appendChild(li);
-            });
-            document.querySelectorAll('.unfriend-in-list-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const friendIdToUnlink = e.currentTarget.dataset.friendId;
-                    const friendName = linkedFriends.find(f => f.userId === friendIdToUnlink)?.name || 'هذا الصديق';
-                    if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friendName}؟`)) {
-                        socket.emit('unfriendUser', { friendId: friendIdToUnlink });
-                    }
-                });
-            });
-        } else {
-            friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
-        }
+        // *** السطر 1192: تم استبدال الكود المكرر باستدعاء الدالة ***
+        updateFriendsPanelList();
     }
     updateFriendBatteryStatus();
 });
@@ -1414,6 +1425,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         togglePanel('connectPanel');
+        // *** السطر 1414: تمت إضافة استدعاء الدالة هنا لضمان تحديث القائمة عند فتح اللوحة ***
+        updateFriendsPanelList();
     });
 
     document.getElementById('connectFriendBtn').addEventListener('click', () => {
