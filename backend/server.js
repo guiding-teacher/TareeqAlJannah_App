@@ -33,7 +33,7 @@ mongoose.connect(DB_URI)
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    photo: { type: String, default: 'image/Picsart_25-08-03_16-47-02-591.png' }, // *** تعديل: استخدام الصورة المحلية كافتراضي
+    photo: { type: String, default: 'image/Picsart_25-08-03_16-47-02-591.png' },
     linkCode: { type: String, unique: true, sparse: true },
     location: {
         type: {
@@ -193,7 +193,7 @@ io.on('connection', async (socket) => {
                 user = new User({
                     userId: userId,
                     name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
-                    photo: photo || 'image/Picsart_25-08-03_16-47-02-591.png', // *** تعديل: استخدام الصورة المحلية كافتراضي
+                    photo: photo || 'image/Picsart_25-08-03_16-47-02-591.png',
                     location: { type: 'Point', coordinates: [0, 0] },
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
                     settings: {
@@ -229,6 +229,29 @@ io.on('connection', async (socket) => {
             if (user.linkedFriends && user.linkedFriends.length > 0) {
                 const friendsData = await User.find({ userId: { $in: user.linkedFriends } });
                 socket.emit('updateFriendsList', friendsData);
+            }
+
+            // *** تعديل: إعلام الأصدقاء المرتبطين فورًا عند اتصال المستخدم ***
+            // هذا يضمن ظهور المستخدم على خرائط أصدقائه بمجرد اتصاله.
+            if (user.settings.shareLocation && !user.settings.stealthMode && user.location && (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0)) {
+                const locationData = {
+                    userId: user.userId,
+                    name: user.name,
+                    photo: user.photo,
+                    location: user.location.coordinates,
+                    batteryStatus: user.batteryStatus,
+                    settings: user.settings,
+                    lastSeen: user.lastSeen,
+                    gender: user.gender,
+                    phone: user.phone,
+                    email: user.email
+                };
+
+                user.linkedFriends.forEach(friendId => {
+                    if (connectedUsers[friendId]) {
+                        io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
+                    }
+                });
             }
 
             // إرسال بيانات المضيف المرتبط إذا كان موجوداً
@@ -280,7 +303,7 @@ io.on('connection', async (socket) => {
                         name: updatedUser.name,
                         photo: updatedUser.photo,
                         location: updatedUser.location.coordinates,
-                        batteryStatus: updatedUser.batteryStatus, // إرسال الاسم الصحيح للحقل
+                        batteryStatus: updatedUser.batteryStatus,
                         settings: updatedUser.settings,
                         lastSeen: updatedUser.lastSeen,
                         gender: updatedUser.gender,
@@ -303,7 +326,6 @@ io.on('connection', async (socket) => {
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
-                            // *** تعديل: استخدام مفتاح الخادم بدلاً من مفتاح العميل
                             const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`);
                             const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
                             
@@ -517,7 +539,6 @@ io.on('connection', async (socket) => {
 
             socket.emit('poiStatus', { success: true, message: `✅ تم إضافة ${newPOI.name} بنجاح.` });
             
-            // *** تعديل: إرسال النقطة الجديدة لجميع المستخدمين المتصلين
             io.emit('newPOIAdded', newPOI);
 
         } catch (error) {
@@ -551,7 +572,6 @@ io.on('connection', async (socket) => {
 
             socket.emit('poiDeleted', { success: true, message: 'تم الحذف بنجاح.', poiId });
             
-            // *** تعديل: إعلام جميع المستخدمين بحذف النقطة
             io.emit('poiDeletedBroadcast', { poiId: poiId });
 
         } catch (error) {
@@ -603,7 +623,6 @@ io.on('connection', async (socket) => {
             point: user.meetingPoint
         };
         
-        // إرسال نقطة التجمع للمنشئ وجميع الأصدقاء
         io.to(socket.id).emit('newMeetingPoint', meetingData);
         user.linkedFriends.forEach(friendId => {
             if (connectedUsers[friendId]) {
@@ -611,7 +630,6 @@ io.on('connection', async (socket) => {
             }
         });
 
-        // إرسال نقطة التجمع لكل المستخدمين عند طلب الخريطة العامة
         io.emit('newMeetingPointBroadcast', meetingData);
 
     } catch (error) {
@@ -626,7 +644,6 @@ io.on('connection', async (socket) => {
         user.meetingPoint = undefined;
         await user.save();
 
-        // إعلام المنشئ وجميع الأصدقاء بانتهاء نقطة التجمع
         io.to(socket.id).emit('meetingPointCleared', { creatorId });
         user.linkedFriends.forEach(friendId => {
             if (connectedUsers[friendId]) {
@@ -634,7 +651,6 @@ io.on('connection', async (socket) => {
             }
         });
 
-        // إعلام جميع المستخدمين بإزالة نقطة التجمع
         io.emit('meetingPointClearedBroadcast', { creatorId });
 
     } catch (error) {
@@ -707,7 +723,6 @@ io.on('connection', async (socket) => {
 
             let connectionLine = [];
             if (user.location && user.location.coordinates && user.location.coordinates[0] !== 0) {
-                 // *** تعديل: استخدام مفتاح الخادم بدلاً من مفتاح العميل
                 const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`);
                 connectionLine = routeResponse.data.routes[0].geometry.coordinates;
             }
