@@ -24,7 +24,7 @@ const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoiYWxpY
 
 // ====================================================================
 // *** تعديل هام للأمان: قم بتغيير هذا الرمز السري إلى كلمة سر قوية! ***
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "aaabraaa1995";
+ const ADMIN_SECRET = process.env.ADMIN_SECRET || "TareeqAdmin@2024";
 // ====================================================================
 
 
