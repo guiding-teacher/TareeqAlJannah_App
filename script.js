@@ -94,13 +94,15 @@ function createCustomMarker(user) {
         el.classList.add('stealth-mode');
     }
 
-    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'image/husseini_avatar1.png';
-
+const userPhotoSrc = user.photo && user.photo !== '' ? 
+    (user.photo.startsWith('http') ? user.photo : `/${user.photo}`) : 
+    '/image/husseini_avatar1.png';
     el.innerHTML = `
-        <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}">
-        <div class="user-marker-name">${user.name}</div>
-        <div class="message-bubble" id="msg-bubble-${user.userId}"></div>
-    `;
+    <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}" 
+         onerror="this.src='/image/husseini_avatar1.png'">
+    <div class="user-marker-name">${user.name}</div>
+    <div class="message-bubble" id="msg-bubble-${user.userId}"></div>
+`;
 
     const marker = new mapboxgl.Marker(el)
         .setLngLat(user.location.coordinates)
