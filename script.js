@@ -94,7 +94,7 @@ function createCustomMarker(user) {
         el.classList.add('stealth-mode');
     }
 
-    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'image/husseini_avatar1.png';
+    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : './husseini_avatar1.png';
 
     el.innerHTML = `
         <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}">
