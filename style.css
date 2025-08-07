@@ -210,6 +210,19 @@ body {
     background-color: #c82333;
 }
 
+
+/* style.css - إضافة تنسيق لزر الدعم الفني */
+#whatsappHelpBtn {
+    background-color: #20c997; /* لون أخضر جميل ومميز */
+    border-color: #20c997;
+}
+
+#whatsappHelpBtn:hover {
+    background-color: #1baa80; /* لون أغمق عند المرور */
+    border-color: #1baa80;
+}
+
+
 .profile-info { text-align: center; }
 
 #userPhoto {
