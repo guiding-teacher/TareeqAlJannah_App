@@ -1553,6 +1553,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+
+ // =======================================================
+    // ===== كود زر الدعم الفني عبر واتساب (الزر الجديد) =====
+    // =======================================================
+    document.getElementById('whatsappHelpBtn').addEventListener('click', () => {
+        // *** تعديل مهم: قم باستبدال هذا الرقم برقم الواتساب الخاص بالدعم الفني ***
+        const supportNumber = '9647708077310'; // مثال: يجب أن يكون الرقم بالصيغة الدولية بدون + أو 00
+
+        const message = "السلام عليكم، لدي استفسار بخصوص تطبيق طريق الجنة.";
+        
+        // إنشاء رابط واتساب
+        const whatsappUrl = `https://wa.me/${supportNumber}?text=${encodeURIComponent(message)}`;
+        
+        // فتح الرابط في نافذة جديدة
+        window.open(whatsappUrl, '_blank');
+    });
+    // ===============================================
+
+
+
+
+
+    
     document.getElementById('sosButton').addEventListener('click', () => {
         if (!currentUser) {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
