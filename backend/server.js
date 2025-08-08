@@ -216,21 +216,77 @@ io.on('connection', async (socket) => {
             const allUsers = await User.find({}, 'userId name').lean();
             const userMap = new Map(allUsers.map(u => [u.userId, u.name]));
 
-            switch (data.type) {
-                case 'stats':
-                    const [userCount, messageCount, poiCount, hostCount] = await Promise.all([
-                        User.countDocuments(),
-                        Message.countDocuments(),
-                        CommunityPOI.countDocuments(),
-                        Moazeb.countDocuments(),
-                    ]);
-                    const meetingCount = await User.countDocuments({ 'meetingPoint.name': { $exists: true } });
-                    payload = { users: userCount, messages: messageCount, pois: poiCount, meetings: meetingCount, hosts: hostCount };
-                    break;
-                    
-                case 'users':
-    payload = await User.find({}, 'userId name photo linkCode phone email isBanned location').lean();
-    break;
+           // ... (بداية معالج admin_get_data)
+switch (data.type) {
+    case 'stats':
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        
+        // 1. حسابات البطاقات
+        const [userCount, messageCount, poiCount, hostCount, activeUserCount] = await Promise.all([
+            User.countDocuments(),
+            Message.countDocuments(),
+            CommunityPOI.coauntDocuments(),
+            Moazeb.countDocuments(),
+            User.countDocuments({ lastSeen: { $gte: sevenDaysAgo } })
+        ]);
+        const meetingCount = await User.countDocuments({ 'meetingPoint.name': { $exists: true } });
+
+        // 2. بيانات الرسوم البيانية
+        // تسجيل المستخدمين
+        const userRegData = await User.aggregate([
+            { $match: { createdAt: { $gte: sevenDaysAgo } } },
+            { $group: {
+                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                count: { $sum: 1 }
+            }},
+            { $sort: { _id: 1 } }
+        ]);
+
+        // توزيع أنواع المضايف
+        const hostTypesData = await Moazeb.aggregate([
+            { $group: { _id: "$type", count: { $sum: 1 } } }
+        ]);
+
+        payload = {
+            counts: { 
+                users: userCount, 
+                messages: messageCount, 
+                pois: poiCount, 
+                meetings: meetingCount, 
+                hosts: hostCount,
+                activeUsers: activeUserCount
+            },
+            charts: {
+                userRegistrations: {
+                    labels: userRegData.map(d => d._id),
+                    values: userRegData.map(d => d.count)
+                },
+                hostTypes: {
+                    labels: hostTypesData.map(d => d._id),
+                    values: hostTypesData.map(d => d.count)
+                }
+            }
+        };
+        break;
+        
+    case 'users':
+        payload = await User.find({}, 'userId name photo linkCode phone email isBanned location').lean();
+        break;
+
+    // *** إضافة الحالة الجديدة هنا ***
+    case 'active_users':
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        payload = await User.find(
+            { lastSeen: { $gte: oneWeekAgo }, isBanned: false },
+            'userId name photo lastSeen phone location'
+        ).sort({ lastSeen: -1 }).lean();
+        break;
+
+    // ... بقية الحالات (messages, pois, etc) تبقى كما هي
+
+
+
+
 
                 case 'messages':
                     const messages = await Message.find().sort({ timestamp: -1 }).limit(200).lean();
