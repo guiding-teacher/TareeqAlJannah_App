@@ -1,4 +1,4 @@
-// server.js - كود السيرفر الكامل مع لوحة التحكم المحدثة
+// server.js - كود السيرفر الكامل مع لوحة التحكم
 
 require('dotenv').config();
 
@@ -65,6 +65,7 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, default: '' },
     batteryStatus: { type: String, default: 'N/A' },
     lastSeen: { type: Date, default: Date.now },
+    // *** تعديل: إضافة حقل للحظر ***
     isBanned: { type: Boolean, default: false },
     createdPOIs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CommunityPOI' }],
     meetingPoint: {
@@ -216,74 +217,20 @@ io.on('connection', async (socket) => {
             const userMap = new Map(allUsers.map(u => [u.userId, u.name]));
 
             switch (data.type) {
-                // ==========================================================
-                // *** هنا تم تطبيق التعديل المطلوب ***
-                // ==========================================================
                 case 'stats':
-                    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-                    
-                    // 1. حسابات البطاقات
-                    const [userCount, messageCount, poiCount, hostCount, activeUserCount] = await Promise.all([
+                    const [userCount, messageCount, poiCount, hostCount] = await Promise.all([
                         User.countDocuments(),
                         Message.countDocuments(),
-                        CommunityPOI.countDocuments(), // تصحيح الخطأ الإملائي هنا
+                        CommunityPOI.countDocuments(),
                         Moazeb.countDocuments(),
-                        User.countDocuments({ lastSeen: { $gte: sevenDaysAgo } })
                     ]);
                     const meetingCount = await User.countDocuments({ 'meetingPoint.name': { $exists: true } });
-
-                    // 2. بيانات الرسوم البيانية
-                    // تسجيل المستخدمين
-                    const userRegData = await User.aggregate([
-                        { $match: { createdAt: { $gte: sevenDaysAgo } } },
-                        { $group: {
-                            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Baghdad" } },
-                            count: { $sum: 1 }
-                        }},
-                        { $sort: { _id: 1 } }
-                    ]);
-
-                    // توزيع أنواع المضايف
-                    const hostTypesData = await Moazeb.aggregate([
-                        { $group: { _id: "$type", count: { $sum: 1 } } }
-                    ]);
-
-                    payload = {
-                        counts: { 
-                            users: userCount, 
-                            messages: messageCount, 
-                            pois: poiCount, 
-                            meetings: meetingCount, 
-                            hosts: hostCount,
-                            activeUsers: activeUserCount
-                        },
-                        charts: {
-                            userRegistrations: {
-                                labels: userRegData.map(d => d._id),
-                                values: userRegData.map(d => d.count)
-                            },
-                            hostTypes: {
-                                labels: hostTypesData.map(d => d._id),
-                                values: hostTypesData.map(d => d.count)
-                            }
-                        }
-                    };
+                    payload = { users: userCount, messages: messageCount, pois: poiCount, meetings: meetingCount, hosts: hostCount };
                     break;
                     
                 case 'users':
-                    payload = await User.find({}, 'userId name photo linkCode phone email isBanned location').lean();
-                    break;
-
-                case 'active_users':
-                    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-                    payload = await User.find(
-                        { lastSeen: { $gte: oneWeekAgo }, isBanned: false },
-                        'userId name photo lastSeen phone location'
-                    ).sort({ lastSeen: -1 }).lean();
-                    break;
-                // ==========================================================
-                // *** نهاية التعديل ***
-                // ==========================================================
+    payload = await User.find({}, 'userId name photo linkCode phone email isBanned location').lean();
+    break;
 
                 case 'messages':
                     const messages = await Message.find().sort({ timestamp: -1 }).limit(200).lean();
@@ -334,6 +281,7 @@ io.on('connection', async (socket) => {
             const userToUpdate = await User.findOneAndUpdate({ userId: data.userId }, { $set: { isBanned: data.ban } });
             if(userToUpdate) {
                 socket.emit('admin_operation_status', { success: true, message: `تم ${data.ban ? 'حظر' : 'فك حظر'} المستخدم بنجاح.` });
+                // If a user is banned, disconnect them if they are online
                 if (data.ban && connectedUsers[data.userId]) {
                     io.to(connectedUsers[data.userId]).disconnect(true);
                 }
@@ -353,7 +301,7 @@ io.on('connection', async (socket) => {
                 case 'poi':
                     result = await CommunityPOI.deleteOne({ _id: data.id });
                     break;
-                case 'meeting':
+                case 'meeting': // Deleting a meeting point means unsetting it from the user
                     result = await User.updateOne({ _id: data.id }, { $unset: { meetingPoint: 1 } });
                     break;
                 case 'host':
@@ -430,6 +378,7 @@ io.on('connection', async (socket) => {
                 await user.save();
                 console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
             } else {
+                // Check if user is banned before proceeding
                 if (user.isBanned) {
                     console.log(`🚫 Banned user attempted to connect: ${user.userId}`);
                     socket.disconnect(true);
@@ -510,7 +459,7 @@ io.on('connection', async (socket) => {
             );
 
             if (updatedUser) {
-                if (updatedUser.isBanned) return;
+                if (updatedUser.isBanned) return; // Don't process updates for banned users
 
                 if (updatedUser.settings.shareLocation && !updatedUser.settings.stealthMode) {
                     if (updatedUser.location.coordinates[0] !== 0 || updatedUser.location.coordinates[1] !== 0) {
@@ -623,7 +572,11 @@ io.on('connection', async (socket) => {
             socket.emit('linkStatus', { success: false, message: 'حدث خطأ أثناء الربط.' });
         }
     });
-    
+
+    // ... (بقية معالجات أحداث المستخدم العادي تبقى كما هي)
+    // ... chatMessage, updateSettings, requestFriendsData, etc.
+    // ... This is to keep the response from being excessively long, 
+    // ... but in the final file, all original user logic remains here.
     socket.on('chatMessage', async (data) => {
         if (!socket.userId || !data.receiverId || !data.message || isAdmin) return;
 
@@ -857,6 +810,7 @@ io.on('connection', async (socket) => {
                 }
             });
 
+            // No need for 'newMeetingPointBroadcast'
         } catch (error) {
             console.error('❌ خطأ في تحديد نقطة التجمع:', error);
         }
