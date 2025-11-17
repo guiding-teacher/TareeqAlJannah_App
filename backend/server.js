@@ -1,4 +1,4 @@
-// server.js
+// server.js - كود السيرفر الكامل مع لوحة التحكم
 
 require('dotenv').config();
 
@@ -19,6 +19,15 @@ const io = new socketIo.Server(server, {
     }
 });
 
+// *** تعديل مهم: إضافة مفتاح الوصول الخاص بـ Mapbox هنا ***
+const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN || 'pk.eyJ1IjoiYWxpYWxpMTIiLCJhIjoiY21kYmh4ZDg2MHFwYTJrc2E1bWZ4NXV4cSJ9.4zUdS1FupIeJ7BGxAXOlEw';
+
+// ====================================================================
+// *** تعديل هام للأمان: قم بتغيير هذا الرمز السري إلى كلمة سر قوية! ***
+ const ADMIN_SECRET = process.env.ADMIN_SECRET || "TareeqAdmin@2024";
+// ====================================================================
+
+
 const DB_URI = process.env.DB_URI || 'mongodb://localhost:27017/tareeq_aljannah';
 mongoose.connect(DB_URI)
 .then(() => console.log('✅ تم الاتصال بقاعدة بيانات MongoDB بنجاح!'))
@@ -28,7 +37,7 @@ mongoose.connect(DB_URI)
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    photo: { type: String, default: 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER' },
+    photo: { type: String, default: 'image/husseini_avatar1.png' },
     linkCode: { type: String, unique: true, sparse: true },
     location: {
         type: {
@@ -56,6 +65,7 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, default: '' },
     batteryStatus: { type: String, default: 'N/A' },
     lastSeen: { type: Date, default: Date.now },
+    isBanned: { type: Boolean, default: false },
     createdPOIs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CommunityPOI' }],
     meetingPoint: {
         name: { type: String },
@@ -63,11 +73,12 @@ const UserSchema = new mongoose.Schema({
             type: { type: String, enum: ['Point'], default: 'Point' },
             coordinates: { type: [Number] }
         },
-        expiresAt: { type: Date } // إضافة حقل تاريخ انتهاء الصلاحية
+        expiresAt: { type: Date }
     },
-    linkedMoazeb: { // إضافة حقل لربط المضيف
+    linkedMoazeb: {
         moazebId: { type: mongoose.Schema.Types.ObjectId, ref: 'Moazeb' },
-        linkedAt: { type: Date }
+        linkedAt: { type: Date },
+        connectionLine: { type: [[Number]] }
     }
 }, { timestamps: true });
 
@@ -140,7 +151,7 @@ const MoazebSchema = new mongoose.Schema({
         coordinates: { type: [Number], required: true }
     },
     createdBy: { type: String, required: true },
-    linkedUsers: [{ type: String }] // إضافة حقل للمستخدمين المرتبطين
+    linkedUsers: [{ type: String }]
 }, { timestamps: true });
 MoazebSchema.index({ location: '2dsphere' });
 const Moazeb = mongoose.model('Moazeb', MoazebSchema);
@@ -150,6 +161,12 @@ app.use(express.static(path.join(__dirname, '../')));
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../index.html'));
 });
+
+// إعداد صفحة الأدمن
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, '../admin.html'));
+});
+
 
 const connectedUsers = {};
 
@@ -176,9 +193,223 @@ io.on('connection', async (socket) => {
     console.log(`📡 مستخدم جديد متصل: ${socket.id}`);
 
     let user;
+    let isAdmin = false; // Flag for admin connections
 
+    // ===== قسم لوحة التحكم الجديد =====
+    socket.on('admin_register', (data) => {
+        if (data.secret === ADMIN_SECRET) {
+            isAdmin = true;
+            console.log('✅ An admin has connected.');
+            socket.join('admins');
+        } else {
+            console.log('❌ Failed admin login attempt.');
+            socket.emit('admin_auth_failed');
+        }
+    });
+
+    socket.on('admin_get_data', async (data) => {
+        if (!isAdmin) return;
+
+        try {
+            let payload = {};
+            const allUsers = await User.find({}, 'userId name').lean();
+            const userMap = new Map(allUsers.map(u => [u.userId, u.name]));
+
+           // ... (بداية معالج admin_get_data)
+switch (data.type) {
+    case 'stats':
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        
+        // 1. حسابات البطاقات
+        const [userCount, messageCount, poiCount, hostCount, activeUserCount] = await Promise.all([
+            User.countDocuments(),
+            Message.countDocuments(),
+            CommunityPOI.countDocuments(),
+            Moazeb.countDocuments(),
+            User.countDocuments({ lastSeen: { $gte: sevenDaysAgo } })
+        ]);
+        const meetingCount = await User.countDocuments({ 'meetingPoint.name': { $exists: true } });
+
+        // 2. بيانات الرسوم البيانية
+        // تسجيل المستخدمين
+        const userRegData = await User.aggregate([
+            { $match: { createdAt: { $gte: sevenDaysAgo } } },
+            { $group: {
+                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                count: { $sum: 1 }
+            }},
+            { $sort: { _id: 1 } }
+        ]);
+
+        // توزيع أنواع المضايف
+        const hostTypesData = await Moazeb.aggregate([
+            { $group: { _id: "$type", count: { $sum: 1 } } }
+        ]);
+
+        payload = {
+            counts: { 
+                users: userCount, 
+                messages: messageCount, 
+                pois: poiCount, 
+                meetings: meetingCount, 
+                hosts: hostCount,
+                activeUsers: activeUserCount
+            },
+            charts: {
+                userRegistrations: {
+                    labels: userRegData.map(d => d._id),
+                    values: userRegData.map(d => d.count)
+                },
+                hostTypes: {
+                    labels: hostTypesData.map(d => d._id),
+                    values: hostTypesData.map(d => d.count)
+                }
+            }
+        };
+        break;
+        
+    case 'users':
+        payload = await User.find({}, 'userId name photo linkCode phone email isBanned location').lean();
+        break;
+
+    // *** إضافة الحالة الجديدة هنا ***
+    case 'active_users':
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        payload = await User.find(
+            { lastSeen: { $gte: oneWeekAgo }, isBanned: false },
+            'userId name photo lastSeen phone location'
+        ).sort({ lastSeen: -1 }).lean();
+        break;
+
+                case 'messages':
+                    const messages = await Message.find().sort({ timestamp: -1 }).limit(200).lean();
+                    payload = messages.map(msg => ({
+                        ...msg,
+                        senderName: userMap.get(msg.senderId) || 'مستخدم محذوف',
+                        receiverName: userMap.get(msg.receiverId) || 'مستخدم محذوف'
+                    }));
+                    break;
+
+                case 'pois':
+                    const pois = await CommunityPOI.find().lean();
+                    payload = pois.map(poi => ({
+                        ...poi,
+                        creatorName: userMap.get(poi.createdBy) || 'N/A'
+                    }));
+                    break;
+
+                case 'meetings':
+                    const usersWithMeetings = await User.find({ 'meetingPoint.name': { $exists: true } }, 'userId name meetingPoint').lean();
+                    payload = usersWithMeetings.map(u => ({
+                        _id: u._id, // an ID for deletion
+                        name: u.meetingPoint.name,
+                        location: u.meetingPoint.location,
+                        expiresAt: u.meetingPoint.expiresAt,
+                        creatorId: u.userId,
+                        creatorName: u.name
+                    }));
+                    break;
+
+                case 'hosts':
+                    const hosts = await Moazeb.find().lean();
+                    payload = hosts.map(host => ({
+                        ...host,
+                        creatorName: userMap.get(host.createdBy) || 'N/A'
+                    }));
+                    break;
+            }
+            socket.emit('admin_data_response', { type: data.type, payload });
+        } catch (error) {
+            console.error(`Error fetching admin data for type ${data.type}:`, error);
+        }
+    });
+    
+    socket.on('admin_ban_user', async (data) => {
+        if (!isAdmin) return;
+        try {
+            const userToUpdate = await User.findOneAndUpdate({ userId: data.userId }, { $set: { isBanned: data.ban } });
+            if(userToUpdate) {
+                socket.emit('admin_operation_status', { success: true, message: `تم ${data.ban ? 'حظر' : 'فك حظر'} المستخدم بنجاح.` });
+                // If a user is banned, disconnect them if they are online
+                if (data.ban && connectedUsers[data.userId]) {
+                    io.to(connectedUsers[data.userId]).disconnect(true);
+                }
+            } else {
+                 socket.emit('admin_operation_status', { success: false, message: 'لم يتم العثور على المستخدم.' });
+            }
+        } catch (error) {
+            socket.emit('admin_operation_status', { success: false, message: 'حدث خطأ في الخادم.' });
+        }
+    });
+
+    socket.on('admin_delete_item', async (data) => {
+        if (!isAdmin) return;
+        try {
+            let result;
+            switch(data.type) {
+                case 'poi':
+                    result = await CommunityPOI.deleteOne({ _id: data.id });
+                    break;
+                case 'meeting': // Deleting a meeting point means unsetting it from the user
+                    result = await User.updateOne({ _id: data.id }, { $unset: { meetingPoint: 1 } });
+                    break;
+                case 'host':
+                    result = await Moazeb.deleteOne({ _id: data.id });
+                    break;
+                default:
+                    socket.emit('admin_operation_status', { success: false, message: 'نوع غير صالح للحذف' });
+                    return;
+            }
+            if(result.deletedCount > 0 || result.modifiedCount > 0) {
+                socket.emit('admin_operation_status', { success: true, message: 'تم حذف العنصر بنجاح.' });
+            } else {
+                socket.emit('admin_operation_status', { success: false, message: 'لم يتم العثور على العنصر أو تم حذفه بالفعل.' });
+            }
+        } catch (error) {
+             socket.emit('admin_operation_status', { success: false, message: 'حدث خطأ أثناء الحذف.' });
+        }
+    });
+
+    socket.on('admin_update_item', async (data) => {
+        if (!isAdmin) return;
+        try {
+            let result;
+             switch(data.type) {
+                case 'user':
+                    result = await User.updateOne({ userId: data.id }, { $set: data.updates });
+                    break;
+                case 'poi':
+                    result = await CommunityPOI.updateOne({ _id: data.id }, { $set: data.updates });
+                    break;
+                case 'host':
+                    result = await Moazeb.updateOne({ _id: data.id }, { $set: data.updates });
+                    break;
+                default:
+                    socket.emit('admin_operation_status', { success: false, message: 'نوع غير صالح للتحديث' });
+                    return;
+            }
+            if(result.modifiedCount > 0) {
+                socket.emit('admin_operation_status', { success: true, message: 'تم تحديث العنصر بنجاح.' });
+            } else {
+                socket.emit('admin_operation_status', { success: false, message: 'لم يتم العثور على العنصر أو لم يتم إجراء أي تغييرات.' });
+            }
+        } catch (error) {
+            socket.emit('admin_operation_status', { success: false, message: 'حدث خطأ أثناء التحديث.' });
+        }
+    });
+    // ===== نهاية قسم لوحة التحكم =====
+
+
+    // منطق المستخدم العادي
     socket.on('registerUser', async (data) => {
+        if (isAdmin) return; 
         const { userId, name, photo, gender, phone, email, emergencyWhatsapp } = data;
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (email && !emailRegex.test(String(email).toLowerCase())) {
+            socket.emit('registrationFailed', { message: 'صيغة البريد الإلكتروني غير صحيحة.' });
+            return;
+        }
 
         try {
             user = await User.findOne({ userId: userId }).populate('createdPOIs').populate('linkedMoazeb.moazebId');
@@ -187,7 +418,7 @@ io.on('connection', async (socket) => {
                 user = new User({
                     userId: userId,
                     name: name || `مستخدم_${Math.random().toString(36).substring(2, 7)}`,
-                    photo: photo || 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER',
+                    photo: photo || 'image/Picsart_25-08-03_16-47-02-591.png',
                     location: { type: 'Point', coordinates: [0, 0] },
                     linkCode: Math.random().toString(36).substring(2, 9).toUpperCase(),
                     settings: {
@@ -202,6 +433,13 @@ io.on('connection', async (socket) => {
                 await user.save();
                 console.log(`✨ تم إنشاء مستخدم جديد في DB: ${user.name} (${user.userId})`);
             } else {
+                // Check if user is banned before proceeding
+                if (user.isBanned) {
+                    console.log(`🚫 Banned user attempted to connect: ${user.userId}`);
+                    socket.disconnect(true);
+                    return;
+                }
+                
                 if (name && user.name !== name) user.name = name;
                 if (photo && user.photo !== photo) user.photo = photo;
                 if (gender && user.gender !== gender) user.gender = gender;
@@ -225,7 +463,27 @@ io.on('connection', async (socket) => {
                 socket.emit('updateFriendsList', friendsData);
             }
 
-            // إرسال بيانات المضيف المرتبط إذا كان موجوداً
+            if (user.settings.shareLocation && !user.settings.stealthMode && user.location && (user.location.coordinates[0] !== 0 || user.location.coordinates[1] !== 0)) {
+                const locationData = {
+                    userId: user.userId,
+                    name: user.name,
+                    photo: user.photo,
+                    location: user.location.coordinates,
+                    batteryStatus: user.batteryStatus,
+                    settings: user.settings,
+                    lastSeen: user.lastSeen,
+                    gender: user.gender,
+                    phone: user.phone,
+                    email: user.email
+                };
+
+                user.linkedFriends.forEach(friendId => {
+                    if (connectedUsers[friendId]) {
+                        io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
+                    }
+                });
+            }
+
             if (user.linkedMoazeb && user.linkedMoazeb.moazebId) {
                 socket.emit('moazebConnectionData', { 
                     moazeb: user.linkedMoazeb.moazebId,
@@ -242,7 +500,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('updateLocation', async (data) => {
-        if (!socket.userId || !data.location) return;
+        if (!socket.userId || !data.location || isAdmin) return;
 
         try {
             const updatedUser = await User.findOneAndUpdate(
@@ -256,6 +514,8 @@ io.on('connection', async (socket) => {
             );
 
             if (updatedUser) {
+                if (updatedUser.isBanned) return; // Don't process updates for banned users
+
                 if (updatedUser.settings.shareLocation && !updatedUser.settings.stealthMode) {
                     if (updatedUser.location.coordinates[0] !== 0 || updatedUser.location.coordinates[1] !== 0) {
                         const newHistoricalLocation = new HistoricalLocation({
@@ -274,28 +534,26 @@ io.on('connection', async (socket) => {
                         name: updatedUser.name,
                         photo: updatedUser.photo,
                         location: updatedUser.location.coordinates,
-                        battery: updatedUser.batteryStatus,
+                        batteryStatus: updatedUser.batteryStatus,
                         settings: updatedUser.settings,
                         lastSeen: updatedUser.lastSeen,
                         gender: updatedUser.gender,
                         phone: updatedUser.phone,
                         email: updatedUser.email
                     };
-
+                    
+                    socket.emit('locationUpdate', locationData);
+                    
                     updatedUser.linkedFriends.forEach(friendId => {
                          if (connectedUsers[friendId]) {
                             io.to(connectedUsers[friendId]).emit('locationUpdate', locationData);
                          }
                     });
 
-                    socket.emit('locationUpdate', locationData);
-
-                    // إذا كان المستخدم مرتبطاً بمضيف، تحديث خط الربط
                     if (updatedUser.linkedMoazeb && updatedUser.linkedMoazeb.moazebId) {
                         const moazeb = await Moazeb.findById(updatedUser.linkedMoazeb.moazebId);
                         if (moazeb) {
-                            // إنشاء خط مسار يعكس الطرق الفعلية
-                            const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
+                            const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${updatedUser.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`);
                             const connectionLine = routeResponse.data.routes[0].geometry.coordinates;
                             
                             await User.updateOne(
@@ -319,17 +577,21 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestLink', async (data) => {
-        const { friendCode } = data;
-        if (!user || !friendCode) {
+        if (!user || !data.friendCode || isAdmin) {
             socket.emit('linkStatus', { success: false, message: 'بيانات الربط ناقصة.' });
             return;
         }
 
         try {
-            const friendToLink = await User.findOne({ linkCode: friendCode });
+            const friendToLink = await User.findOne({ linkCode: data.friendCode });
 
             if (!friendToLink) {
                 socket.emit('linkStatus', { success: false, message: 'رمز ربط غير صحيح أو المستخدم غير موجود.' });
+                return;
+            }
+
+            if (friendToLink.isBanned) {
+                socket.emit('linkStatus', { success: false, message: 'لا يمكن الربط مع هذا المستخدم.' });
                 return;
             }
 
@@ -365,27 +627,26 @@ io.on('connection', async (socket) => {
             socket.emit('linkStatus', { success: false, message: 'حدث خطأ أثناء الربط.' });
         }
     });
-
+    
     socket.on('chatMessage', async (data) => {
-        const { receiverId, message } = data;
-        if (!socket.userId || !receiverId || !message) return;
+        if (!socket.userId || !data.receiverId || !data.message || isAdmin) return;
 
         try {
             const newMessage = new Message({
                 senderId: socket.userId,
-                receiverId: receiverId,
-                message: message,
+                receiverId: data.receiverId,
+                message: data.message,
             });
             await newMessage.save();
 
-            if (connectedUsers[receiverId]) {
+            if (connectedUsers[data.receiverId]) {
                 const senderUser = await User.findOne({ userId: socket.userId });
-                io.to(connectedUsers[receiverId]).emit('newChatMessage', {
+                io.to(connectedUsers[data.receiverId]).emit('newChatMessage', {
                     senderId: socket.userId,
                     senderName: senderUser ? senderUser.name : 'مجهول',
-                    message: message,
+                    message: data.message,
                     timestamp: newMessage.timestamp,
-                    receiverId: receiverId
+                    receiverId: data.receiverId
                 });
             }
         } catch (error) {
@@ -394,9 +655,17 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('updateSettings', async (data) => {
-        if (!user) return;
+        if (!user || isAdmin) return;
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (data.email && !emailRegex.test(String(data.email).toLowerCase())) {
+            // يمكن إرسال إشعار للمستخدم بأن البريد الإلكتروني غير صالح
+            return;
+        }
+
         try {
             user.settings = { ...user.settings, ...data };
+            if (data.name !== undefined) user.name = data.name;
             if (data.gender !== undefined) user.gender = data.gender;
             if (data.phone !== undefined) user.phone = data.phone;
             if (data.email !== undefined) user.email = data.email;
@@ -410,7 +679,7 @@ io.on('connection', async (socket) => {
                  if (user.location && user.location.coordinates) {
                     const locationData = {
                         userId: user.userId, name: user.name, photo: user.photo,
-                        location: user.location.coordinates, battery: user.batteryStatus,
+                        location: user.location.coordinates, batteryStatus: user.batteryStatus,
                         settings: user.settings, lastSeen: user.lastSeen, gender: user.gender,
                         phone: user.phone, email: user.email
                     };
@@ -428,7 +697,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestFriendsData', async (data) => {
-        if (!socket.userId || !data.friendIds || !Array.isArray(data.friendIds)) return;
+        if (!socket.userId || !data.friendIds || !Array.isArray(data.friendIds) || isAdmin) return;
         try {
             const friendsData = await User.find({ userId: { $in: data.friendIds } });
             socket.emit('updateFriendsList', friendsData);
@@ -439,7 +708,7 @@ io.on('connection', async (socket) => {
 
     socket.on('requestHistoricalPath', async (data) => {
         const { targetUserId, limit = 200 } = data;
-        if (!user || !targetUserId) {
+        if (!user || !targetUserId || isAdmin) {
             socket.emit('historicalPathData', { success: false, message: 'بيانات الطلب ناقصة.' });
             return;
         }
@@ -459,7 +728,7 @@ io.on('connection', async (socket) => {
 
     socket.on('unfriendUser', async (data) => {
         const { friendId } = data;
-        if (!user || !friendId) return;
+        if (!user || !friendId || isAdmin) return;
 
         try {
             const friendToUnlink = await User.findOne({ userId: friendId });
@@ -490,7 +759,7 @@ io.on('connection', async (socket) => {
 
     socket.on('addCommunityPOI', async (data) => {
         const { name, description, category, location, icon } = data;
-        if (!user || !name || !location) return;
+        if (!user || !name || !location || isAdmin) return;
 
         try {
             const newPOI = new CommunityPOI({
@@ -507,8 +776,8 @@ io.on('connection', async (socket) => {
             );
 
             socket.emit('poiStatus', { success: true, message: `✅ تم إضافة ${newPOI.name} بنجاح.` });
-            io.emit('updatePOIs');
-            socket.emit('registerUser', { userId: user.userId });
+            
+            io.emit('newPOIAdded', newPOI);
 
         } catch (error) {
             console.error('❌ خطأ في إضافة POI:', error);
@@ -518,7 +787,7 @@ io.on('connection', async (socket) => {
 
     socket.on('deletePOI', async (data) => {
         const { poiId } = data;
-        if (!user || !poiId) return;
+        if (!user || !poiId || isAdmin) return;
 
         try {
             const poi = await CommunityPOI.findById(poiId);
@@ -540,8 +809,8 @@ io.on('connection', async (socket) => {
             );
 
             socket.emit('poiDeleted', { success: true, message: 'تم الحذف بنجاح.', poiId });
-            io.emit('updatePOIs');
-            socket.emit('registerUser', { userId: user.userId });
+            
+            io.emit('poiDeletedBroadcast', { poiId: poiId });
 
         } catch (error) {
             console.error('❌ خطأ في حذف POI:', error);
@@ -550,6 +819,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestPOIs', async () => {
+        if (isAdmin) return;
         try {
             const pois = await CommunityPOI.find({ isApproved: true });
             socket.emit('updatePOIsList', pois);
@@ -560,7 +830,7 @@ io.on('connection', async (socket) => {
 
     socket.on('requestChatHistory', async (data) => {
         const { friendId } = data;
-        if (!socket.userId || !friendId) return;
+        if (!socket.userId || !friendId || isAdmin) return;
         try {
             const chatHistory = await Message.find({
                 $or: [
@@ -575,9 +845,8 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('setMeetingPoint', async (data) => {
-        if (!user || !data.name || !data.location) return;
+        if (!user || !data.name || !data.location || isAdmin) return;
         try {
-            // تعيين تاريخ انتهاء بعد 24 ساعة
             const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
             
             user.meetingPoint = {
@@ -593,36 +862,39 @@ io.on('connection', async (socket) => {
                 point: user.meetingPoint
             };
             
-            socket.emit('newMeetingPoint', meetingData);
+            io.to(socket.id).emit('newMeetingPoint', meetingData);
             user.linkedFriends.forEach(friendId => {
                 if (connectedUsers[friendId]) {
                     io.to(connectedUsers[friendId]).emit('newMeetingPoint', meetingData);
                 }
             });
+
         } catch (error) {
             console.error('❌ خطأ في تحديد نقطة التجمع:', error);
         }
     });
 
     socket.on('clearMeetingPoint', async () => {
-        if (!user) return;
+        if (!user || isAdmin) return;
         try {
             const creatorId = user.userId;
             user.meetingPoint = undefined;
             await user.save();
-            socket.emit('meetingPointCleared', { creatorId });
+    
+            io.to(socket.id).emit('meetingPointCleared', { creatorId });
             user.linkedFriends.forEach(friendId => {
                 if (connectedUsers[friendId]) {
                     io.to(connectedUsers[friendId]).emit('meetingPointCleared', { creatorId });
                 }
             });
+    
         } catch (error) {
             console.error('❌ خطأ في إنهاء نقطة التجمع:', error);
         }
     });
 
     socket.on('addMoazeb', async (data) => {
-        if (!user || !data.name || !data.address || !data.phone || !data.governorate || !data.district || !data.location) {
+        if (!user || !data.name || !data.address || !data.phone || !data.governorate || !data.district || !data.location || isAdmin) {
             socket.emit('moazebStatus', { success: false, message: 'البيانات ناقصة.' });
             return;
         }
@@ -641,6 +913,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('searchMoazeb', async (query) => {
+        if (isAdmin) return;
         try {
             const searchCriteria = {};
             if (query.phone) searchCriteria.phone = { $regex: query.phone, $options: 'i' };
@@ -656,6 +929,7 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('getAllMoazeb', async () => {
+        if (isAdmin) return;
         try {
             const moazebs = await Moazeb.find().limit(100);
             socket.emit('allMoazebData', { success: true, moazebs });
@@ -667,7 +941,7 @@ io.on('connection', async (socket) => {
 
     socket.on('linkToMoazeb', async (data) => {
         const { moazebId } = data;
-        if (!user || !moazebId) {
+        if (!user || !moazebId || isAdmin) {
             socket.emit('linkToMoazebStatus', { success: false, message: 'بيانات ناقصة.' });
             return;
         }
@@ -679,20 +953,17 @@ io.on('connection', async (socket) => {
                 return;
             }
 
-            // إضافة المستخدم إلى قائمة المرتبطين بالمضيف
             if (!moazeb.linkedUsers.includes(user.userId)) {
                 moazeb.linkedUsers.push(user.userId);
                 await moazeb.save();
             }
 
-            // إنشاء خط مسار يعكس الطرق الفعلية
             let connectionLine = [];
-            if (user.location && user.location.coordinates) {
-                const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${mapboxgl.accessToken}`);
+            if (user.location && user.location.coordinates && user.location.coordinates[0] !== 0) {
+                const routeResponse = await axios.get(`https://api.mapbox.com/directions/v5/mapbox/driving/${user.location.coordinates.join(',')};${moazeb.location.coordinates.join(',')}?geometries=geojson&access_token=${MAPBOX_ACCESS_TOKEN}`);
                 connectionLine = routeResponse.data.routes[0].geometry.coordinates;
             }
 
-            // تحديث بيانات الربط للمستخدم
             user.linkedMoazeb = {
                 moazebId: moazeb._id,
                 linkedAt: new Date(),
@@ -707,7 +978,6 @@ io.on('connection', async (socket) => {
                 connectionLine: connectionLine
             });
 
-            // إرسال بيانات الربط إلى العميل
             socket.emit('moazebConnectionData', { 
                 moazeb: moazeb,
                 connectionLine: connectionLine
@@ -720,14 +990,13 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('unlinkFromMoazeb', async () => {
-        if (!user || !user.linkedMoazeb) return;
+        if (!user || !user.linkedMoazeb || isAdmin) return;
 
         try {
             const moazebId = user.linkedMoazeb.moazebId;
             user.linkedMoazeb = undefined;
             await user.save();
 
-            // إزالة المستخدم من قائمة المرتبطين بالمضيف
             await Moazeb.findByIdAndUpdate(moazebId, {
                 $pull: { linkedUsers: user.userId }
             });
@@ -737,7 +1006,6 @@ io.on('connection', async (socket) => {
                 message: 'تم إلغاء الربط مع المضيف بنجاح.'
             });
 
-            // إرسال حدث لإزالة خط الربط من الخريطة
             socket.emit('moazebConnectionRemoved');
 
         } catch (error) {
@@ -750,10 +1018,11 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('requestPrayerTimes', async () => {
+        if (isAdmin) return;
         try {
-            const latitude = 32.6163; // كربلاء
-            const longitude = 44.0249; // كربلاء
-            const method = 2; // Jafari (Ithna Ashari)
+            const latitude = 32.6163;
+            const longitude = 44.0249;
+            const method = 2;
             const date = new Date();
             const dateString = `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
             
@@ -785,4 +1054,5 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 الخادم يعمل على المنفذ: ${PORT}`);
     console.log(`🔗 افتح متصفحك على: http://localhost:${PORT}`);
+    console.log(`🔑 لوحة التحكم على: http://localhost:${PORT}/admin`);
 });

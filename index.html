@@ -4,46 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>طريق الجنة - تحديد المواقع والمراسلة المخصص للعراق</title>
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.13.0/mapbox-gl.js"></script>
+    <!-- تم توحيد إصدارات Mapbox لتجنب التعارض -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    <style>
-        .message-bubble {
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #007bff;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            white-space: nowrap;
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-            z-index: 10;
-        }
-        
-        .message-bubble.show {
-            opacity: 1;
-        }
-        
-        .moazeb-connection-line {
-            background-color: #FFA500;
-            width: 4px;
-            height: 100%;
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 5;
-        }
-    </style>
 </head>
 <body>
     <header class="main-header">
@@ -58,12 +23,30 @@
             <button id="showFeaturesBtn" title="ميزات إضافية"><i class="fas fa-bars"></i></button>
             <button id="showSettingsBtn" title="الإعدادات والخصوصية"><i class="fas fa-cog"></i></button>
             <button id="showAllMoazebBtn" title="عرض جميع المضيفين"><i class="fas fa-map-marked-alt"></i> عرض المعزب</button>
+            <button id="whatsappHelpBtn" title="الدعم الفني والاستفسارات"><i class="fas fa-question-circle"></i> الدعم</button>
+            
+            
+            <!-- زر التوجيه (ذهاب) -->
+            <button id="showDirectionsBtn" title="التوجيه والمسارات"><i class="fas fa-directions"></i> ذهاب</button>
+
+            <!-- حقل البحث في الخريطة -->
+            <div class="search-container" style="position: relative; display: inline-block;">
+                <input type="text" id="mapSearchInput" placeholder="ابحث عن مكان..." 
+                    style="padding: 10px; border-radius: 25px; border: 1px solid #ccc; width: 250px; font-size: 0.9em; direction: rtl;">
+                <div id="searchResults" class="search-results-dropdown" style="display: none;"></div>
+            </div>
+            
+            
+            
             <button id="sosButton" class="sos-btn" style=" background-color: rgba(255, 20, 0, 0.93); text-align:center" title="زر الطوارئ"><i class="fas fa-exclamation-triangle"></i></button>
         </nav>
         
     </header>
-
-    <div id="map"></div>
+    
+    <div id="map">
+        <!-- شريط معلومات المسار على الخريطة -->
+        <div id="route-info-bar"></div>
+    </div>
 
     <div id="bottomChatBar" class="bottom-chat-bar">
         <select id="bottomChatFriendSelect"></select>
@@ -91,7 +74,9 @@
     <div class="overlay-panel" id="profilePanel">
         <h2><i class="fas fa-user-circle"></i> ملفي الشخصي</h2>
         <div class="profile-info">
-            <img id="userPhoto" src="image/Picsart_25-08-03_16-47-02-591.png" alt="صورة المستخدم">
+           <img id="userPhoto" src="image/treqaljana.png" alt="صورة المستخدم"
+     onerror="this.src='image/treqaljana.png'">
+            
             <p><strong>الاسم:</strong> <span id="userName">اسم المستخدم</span></p>
             <p><strong>رمز الربط:</strong> <span id="userLinkCode">ABCD123</span> <button id="copyLinkCodeBtn" style="width: auto; padding: 5px 10px; margin-right: 5px;"><i class="fas fa-copy"></i> نسخ</button></p>
             <button id="generateCodeBtn"><i class="fas fa-sync-alt"></i> توليد رمز جديد</button>
@@ -186,7 +171,7 @@
         <div class="feature-section" style="margin-top: 20px; text-align: right;">
             <h3><i class="fas fa-drafting-compass"></i> إضافاتي على الخريطة</h3>
             <div id="myCreationsList" style="max-height: 150px; overflow-y: auto; padding-right: 10px;">
-                <p class="feature-info">قائمة نقاط الاهتمام ونقاط التجمع التي أنشأتها...</p>
+                <p class="feature-info">قائمة نقاط الاهتمام ونقطاط التجمع التي أنشأتها...</p>
             </div>
         </div>
         <div class="feature-section">
@@ -233,6 +218,35 @@
         </div>
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
+    
+    <!-- نافذة التوجيه -->
+<div class="overlay-panel" id="directionsPanel">
+    <h2><i class="fas fa-route"></i> التوجيه إلى وجهة</h2>
+    
+    <div class="directions-section">
+        <h3><i class="fas fa-play-circle"></i> نقطة البداية</h3>
+        <input type="text" id="startPointInput" placeholder="اكتب المكان أو اضغط تحديد موقعي">
+        <button id="setCurrentAsStartBtn"><i class="fas fa-location-arrow"></i> تحديد موقعي</button>
+    </div>
+    
+    <div class="directions-section">
+        <h3><i class="fas fa-map-marker-alt"></i> نقطة الوصول</h3>
+        <input type="text" id="endPointInput" placeholder="اكتب وجهتك...">
+        <div id="endPointSuggestions" class="suggestions-dropdown"></div>
+    </div>
+    
+    <div class="directions-section">
+        <button id="calculateRouteBtn" class="primary-btn"><i class="fas fa-route"></i> إظهار المسار</button>
+        <button id="clearRouteBtn" class="danger-btn"><i class="fas fa-eraser"></i> مسح المسار</button>
+    </div>
+    
+    <div id="routeInfo" class="route-info" style="display: none;">
+        <p><i class="fas fa-info-circle"></i> <span id="routeDistance"></span></p>
+        <p><i class="fas fa-clock"></i> <span id="routeDuration"></span></p>
+    </div>
+    
+    <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
+</div>
 
     <!-- لوحة الإعدادات والخصوصية -->
     <div class="overlay-panel" id="settingsPanel">
@@ -290,7 +304,6 @@
         <button class="close-btn"><i class="fas fa-times"></i> إغلاق</button>
     </div>
 
-    <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script src="script.js"></script>
 </body>

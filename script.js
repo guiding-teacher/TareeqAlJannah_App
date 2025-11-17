@@ -1,5 +1,4 @@
-// script.js
-
+// تهيئة Mapbox
 mapboxgl.setRTLTextPlugin(
     'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.3.0/mapbox-gl-rtl-text.js',
     null,
@@ -15,7 +14,17 @@ const map = new mapboxgl.Map({
     center: [43.6875, 33.3152],
     zoom: 6,
     pitch: 45,
-    bearing: -17.6
+    bearing: -17.6,
+    preserveDrawingBuffer: true, // للسماح بالتقاط الصور
+    locale: {
+        'AttributionControl.ToggleAttribution': 'تبديل الإسناد',
+        'AttributionControl.MapFeedback': 'ملاحظات الخريطة',
+        'FullscreenControl.Enter': 'عرض ملء الشاشة',
+        'FullscreenControl.Exit': 'الخروج من ملء الشاشة',
+        'NavigationControl.ResetBearing': 'إعادة توجيه الشمال',
+        'NavigationControl.ZoomIn': 'تكبير',
+        'NavigationControl.ZoomOut': 'تصغير'
+    }
 });
 
 // متغيرات عامة
@@ -29,6 +38,17 @@ let currentHistoricalPathLayer = null;
 let currentChatFriendId = null;
 let activeMessageTimers = {};
 let moazebConnectionLayerId = null;
+let proximityAlertPlayed = false;
+let prayerAlertPlayed = false;
+let lastPrayerTime = '';
+let searchResultMarker = null;
+
+// متغيرات التوجيه
+let currentRouteLayerId = null;
+let startPointMarker = null;
+let endPointMarker = null;
+let routeStartCoords = null;
+let routeEndCoords = null;
 
 // المواقع الرئيسية في العراق
 const holySites = [];
@@ -38,6 +58,9 @@ const socket = io('https://tareeqaljannah-app.onrender.com');
 
 // وظائف عامة للواجهة الرسومية
 function togglePanel(panelId) {
+    map.off('click', closeAllPanels);
+    document.body.removeEventListener('click', closeAllPanelsOnClickOutside);
+
     document.querySelectorAll('.overlay-panel').forEach(panel => {
         panel.classList.remove('active');
     });
@@ -54,18 +77,39 @@ function togglePanel(panelId) {
             if (activeBtn) {
                 activeBtn.classList.add('active');
             }
+            setTimeout(() => {
+                map.on('click', closeAllPanels);
+                document.body.addEventListener('click', closeAllPanelsOnClickOutside);
+            }, 100);
         }
+    }
+}
+
+function closeAllPanels() {
+    togglePanel(null);
+    document.getElementById('showGeneralMapBtn').classList.add('active');
+}
+
+function closeAllPanelsOnClickOutside(e) {
+    const activePanel = document.querySelector('.overlay-panel.active');
+    const headerButton = e.target.closest('.main-header nav button');
+    if (activePanel && !activePanel.contains(e.target) && !headerButton) {
+        closeAllPanels();
     }
 }
 
 document.querySelectorAll('.close-btn').forEach(button => {
     button.addEventListener('click', (e) => {
-        e.target.closest('.overlay-panel').classList.remove('active');
+        const panel = e.target.closest('.overlay-panel');
+        if (panel) {
+            panel.classList.remove('active');
+        }
         document.querySelectorAll('.main-header nav button').forEach(btn => {
             btn.classList.remove('active');
         });
         document.getElementById('showGeneralMapBtn').classList.add('active');
-        showGeneralMap();
+        map.off('click', closeAllPanels);
+        document.body.removeEventListener('click', closeAllPanelsOnClickOutside);
     });
 });
 
@@ -92,13 +136,15 @@ function createCustomMarker(user) {
         el.classList.add('stealth-mode');
     }
 
-    const userPhotoSrc = user.photo && user.photo !== '' ? user.photo : 'https://via.placeholder.com/100/CCCCCC/FFFFFF?text=USER';
-
+    const userPhotoSrc = user.photo && user.photo !== '' ?
+        (user.photo.startsWith('http') ? user.photo : `/${user.photo}`) :
+        'image/husseini_avatar.png';
     el.innerHTML = `
-        <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}">
-        <div class="user-marker-name">${user.name}</div>
-        <div class="message-bubble" id="msg-bubble-${user.userId}"></div>
-    `;
+    <img class="user-marker-photo" src="${userPhotoSrc}" alt="${user.name}" 
+         onerror="this.src='image/husseini_avatar.png'">
+    <div class="user-marker-name">${user.name}</div>
+    <div class="message-bubble" id="msg-bubble-${user.userId}"></div>
+`;
 
     const marker = new mapboxgl.Marker(el)
         .setLngLat(user.location.coordinates)
@@ -119,7 +165,7 @@ function showFriendDetailsPopup(friend) {
     if (existingPopup) {
         existingPopup.remove();
     }
-    
+
     const currentUserHasValidLocation = currentUser && currentUser.location && currentUser.location.coordinates && (currentUser.location.coordinates[0] !== 0 || currentUser.location.coordinates[1] !== 0);
     const friendHasValidLocation = friend && friend.location && friend.location.coordinates && (friend.location.coordinates[0] !== 0 || friend.location.coordinates[1] !== 0);
 
@@ -142,7 +188,10 @@ function showFriendDetailsPopup(friend) {
     `;
 
     const popupContent = `
-        <h3>${friend.name}</h3>
+        <h3>
+            ${friend.name}
+            <i class="fas fa-question-circle coord-display-icon" data-coords="${friend.location.coordinates.join(',')}" title="عرض الإحداثيات"></i>
+        </h3>
         <p><i class="fas fa-battery-full"></i> البطارية: ${friend.batteryStatus || 'N/A'}</p>
         ${distanceHtml}
         <p><i class="fas fa-clock"></i> آخر ظهور: ${lastSeenTime}</p>
@@ -153,7 +202,7 @@ function showFriendDetailsPopup(friend) {
         </div>
     `;
 
-    const popup = new mapboxgl.Popup({ offset: 25 })
+    const popup = new mapboxgl.Popup({ offset: 50 })
         .setLngLat(friend.location.coordinates)
         .setHTML(popupContent)
         .addTo(map);
@@ -171,7 +220,238 @@ function showFriendDetailsPopup(friend) {
             document.getElementById('bottomChatBar').classList.add('active');
             popup.remove();
         });
+        document.querySelector(`.coord-display-icon[data-coords="${friend.location.coordinates.join(',')}"]`).addEventListener('click', (e) => {
+            const coords = e.target.dataset.coords.split(',');
+            alert(`إحداثيات ${friend.name}:\nخط الطول: ${coords[0]}\nخط العرض: ${coords[1]}`);
+        });
     });
+}
+
+// ========== وظائف التوجيه والبحث ==========
+
+// 1. البحث العالمي عبر Geocoding API
+async function searchPlaces(query) {
+    if (!query || query.length < 2) return [];
+    try {
+        const response = await fetch(
+            `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+            `access_token=${mapboxgl.accessToken}&` +
+            `language=ar&` +
+            `country=iq&` +
+            `limit=5`
+        );
+        const data = await response.json();
+        return data.features || [];
+    } catch (error) {
+        console.error('خطأ في البحث العالمي:', error);
+        return [];
+    }
+}
+
+// 2. البحث المحلي في الميزات الظاهرة على الخريطة - نسخة محسنة
+function searchVisibleFeatures(query) {
+    if (!map.isStyleLoaded() || !query) return [];
+    
+    const allFeatures = [];
+    
+    // جلب جميع الطبقات المرئية
+    const layerIds = map.getStyle().layers.map(layer => layer.id);
+    
+    layerIds.forEach(layerId => {
+        try {
+            const features = map.queryRenderedFeatures({ layers: [layerId] });
+            allFeatures.push(...features);
+        } catch (e) {
+            // تجاهل الطبقات التي لا يمكن الاستعلام عنها
+        }
+    });
+    
+    const matchingFeatures = [];
+    const foundNames = new Set();
+
+    for (const feature of allFeatures) {
+        // البحث في جميع خصائص النص المحتملة
+        const possibleNameFields = [
+            'name_ar', 'name_ar_rm', 'name', 'name_en', 
+            'name_ar_1', 'name_1', 'text_ar', 'text', 'text_en',
+            'place_name_ar', 'place_name', 'address', 'street',
+            'locality', 'region', 'neighborhood', 'district'
+        ];
+        
+        let featureName = '';
+        
+        for (const field of possibleNameFields) {
+            if (feature.properties[field] && 
+                typeof feature.properties[field] === 'string' && 
+                feature.properties[field].toLowerCase().includes(query.toLowerCase())) {
+                featureName = feature.properties[field];
+                break;
+            }
+        }
+        
+        if (featureName && !foundNames.has(featureName)) {
+            foundNames.add(featureName);
+            
+            // الحصول على إحداثيات الميزة
+            let coordinates = [];
+            
+            if (feature.geometry.type === 'Point') {
+                coordinates = feature.geometry.coordinates;
+            } else if (feature.geometry.type === 'LineString' || feature.geometry.type === 'Polygon') {
+                // للمسارات والمناطق، نأخذ المركز التقريبي
+                const extent = mapboxgl.LngLatBounds.fromLngLat(feature.geometry.coordinates.flat());
+                coordinates = extent.getCenter().toArray();
+            }
+            
+            if (coordinates.length === 2) {
+                matchingFeatures.push({
+                    place_name_ar: featureName,
+                    place_name: featureName,
+                    center: coordinates,
+                    place_type: [feature.layer['source-layer'] || feature.layer.id || 'on-map-feature'],
+                    text_ar: featureName,
+                    context: [],
+                    source: 'map-feature'
+                });
+            }
+        }
+    }
+    
+    return matchingFeatures;
+}
+
+// دالة مساعدة لترجمة أنواع الأماكن
+function translateFeatureType(type) {
+    const translations = {
+        'country': 'دولة', 'region': 'محافظة', 'postcode': 'رمز بريدي',
+        'district': 'قضاء', 'place': 'مدينة/بلدة', 'locality': 'منطقة',
+        'neighborhood': 'حي', 'address': 'عنوان/شارع', 'poi': 'نقطة اهتمام',
+        'poi_label': 'نقطة اهتمام', 'road_label': 'شارع', 'water_label': 'مسطح مائي',
+        'on-map-feature': 'تسمية على الخريطة'
+    };
+    const mainType = Array.isArray(type) ? type[0] : type;
+    return translations[mainType] || mainType;
+}
+
+// 3. عرض النتائج المدمجة - نسخة محسنة
+function displaySearchResults(results, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (results.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    // ترتيب النتائج: النتائج المحلية أولاً ثم العالمية
+    const sortedResults = [...results].sort((a, b) => {
+        if (a.source === 'map-feature' && b.source !== 'map-feature') return -1;
+        if (b.source === 'map-feature' && a.source !== 'map-feature') return 1;
+        return 0;
+    });
+
+    sortedResults.forEach(feature => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+        
+        const icon = feature.source === 'map-feature' ? 
+            '<i class="fas fa-draw-polygon"></i>' : 
+            '<i class="fas fa-map-marker-alt"></i>';
+            
+        div.innerHTML = `
+            ${icon}
+            <div>
+                <strong>${feature.place_name_ar || feature.place_name}</strong>
+                <small style="color: var(--accent-color); font-weight: bold;">${translateFeatureType(feature.place_type)}</small>
+                ${feature.source === 'map-feature' ? '<small style="color: #888; margin-right: 5px;">(على الخريطة)</small>' : ''}
+            </div>
+        `;
+
+        div.addEventListener('click', () => {
+            const coords = feature.center;
+            const placeName = feature.place_name_ar || feature.place_name;
+
+            if (containerId === 'searchResults') {
+                // تكبير أكثر للميزات المحلية
+                const zoomLevel = feature.source === 'map-feature' ? 17 : 16;
+                map.flyTo({ center: coords, zoom: zoomLevel });
+                container.style.display = 'none';
+                document.getElementById('mapSearchInput').value = placeName;
+            } else if (containerId === 'endPointSuggestions') {
+                routeEndCoords = coords;
+                document.getElementById('endPointInput').value = placeName;
+                container.style.display = 'none';
+                if (endPointMarker) endPointMarker.remove();
+                endPointMarker = new mapboxgl.Marker({ color: '#FF0000' }).setLngLat(coords).addTo(map);
+            }
+        });
+        container.appendChild(div);
+    });
+
+    container.style.display = 'block';
+}
+
+// حساب المسار
+async function calculateRoute(start, end) {
+    if (!start || !end) {
+        alert('الرجاء تحديد نقطة البداية والوصول');
+        return;
+    }
+    try {
+        const response = await fetch(
+            `https://api.mapbox.com/directions/v5/mapbox/driving/${start.join(',')};${end.join(',')}?` +
+            `geometries=geojson&language=ar&overview=full&access_token=${mapboxgl.accessToken}`
+        );
+        const data = await response.json();
+        if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0];
+            const routeGeometry = route.geometry;
+            const distance = (route.distance / 1000).toFixed(2);
+            const duration = (route.duration / 60).toFixed(0);
+            clearRoute();
+            currentRouteLayerId = 'route-' + Date.now();
+            map.addSource(currentRouteLayerId, { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: routeGeometry } });
+            map.addLayer({ id: currentRouteLayerId, type: 'line', source: currentRouteLayerId, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#007bff', 'line-width': 8, 'line-opacity': 0.8 } });
+            if (!startPointMarker) {
+                startPointMarker = new mapboxgl.Marker({ color: '#00FF00' }).setLngLat(start).setPopup(new mapboxgl.Popup().setHTML('<h4>نقطة البداية</h4>')).addTo(map);
+            }
+            if (!endPointMarker) {
+                endPointMarker = new mapboxgl.Marker({ color: '#FF0000' }).setLngLat(end).setPopup(new mapboxgl.Popup().setHTML('<h4>نقطة الوصول</h4>')).addTo(map);
+            }
+            document.getElementById('routeInfo').style.display = 'block';
+            document.getElementById('routeDistance').textContent = `${distance} كم`;
+            document.getElementById('routeDuration').textContent = `${duration} دقيقة`;
+            const routeInfoBar = document.getElementById('route-info-bar');
+            routeInfoBar.innerHTML = `<span><i class="fas fa-route"></i> ${distance} كم</span><span><i class="fas fa-clock"></i> ${duration} دقيقة</span>`;
+            routeInfoBar.classList.add('active');
+            const bounds = new mapboxgl.LngLatBounds();
+            routeGeometry.coordinates.forEach(coord => bounds.extend(coord));
+            map.fitBounds(bounds, { padding: 80 });
+        } else {
+            alert('لم يتم العثور على مسار');
+        }
+    } catch (error) {
+        console.error('خطأ في حساب المسار:', error);
+        alert('حدث خطأ أثناء حساب المسار');
+    }
+}
+
+// مسح المسار
+function clearRoute() {
+    if (currentRouteLayerId && map.getLayer(currentRouteLayerId)) {
+        map.removeLayer(currentRouteLayerId);
+        map.removeSource(currentRouteLayerId);
+        currentRouteLayerId = null;
+    }
+    if (startPointMarker) { startPointMarker.remove(); startPointMarker = null; }
+    if (endPointMarker) { endPointMarker.remove(); endPointMarker = null; }
+    routeStartCoords = null;
+    routeEndCoords = null;
+    document.getElementById('routeInfo').style.display = 'none';
+    document.getElementById('startPointInput').value = '';
+    document.getElementById('endPointInput').value = '';
+    document.getElementById('route-info-bar').classList.remove('active');
 }
 
 function createPOIMarker(poi) {
@@ -189,17 +469,22 @@ function createPOIMarker(poi) {
 
     el.innerHTML = iconHtml;
 
+    const popupHTML = `
+        <h3>
+            ${poi.name}
+            <i class="fas fa-question-circle coord-display-icon" data-coords="${poi.location.coordinates.join(',')}" title="عرض الإحداثيات"></i>
+        </h3>
+        <p>${poi.description || 'لا يوجد وصف'}</p>
+        <p><strong>الفئة:</strong> ${poi.category}</p>
+        ${currentUser && poi.createdBy === currentUser.userId ?
+            `<button class="delete-poi-btn" data-poi-id="${poi._id}">
+                <i class="fas fa-trash"></i> حذف
+            </button>` : ''}
+    `;
+
     const marker = new mapboxgl.Marker(el)
         .setLngLat(poi.location.coordinates)
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
-            <h3>${poi.name}</h3>
-            <p>${poi.description || 'لا يوجد وصف'}</p>
-            <p><strong>الفئة:</strong> ${poi.category}</p>
-            ${currentUser && poi.createdBy === currentUser.userId ? 
-                `<button class="delete-poi-btn" data-poi-id="${poi._id}">
-                    <i class="fas fa-trash"></i> حذف
-                </button>` : ''}
-        `))
+        .setPopup(new mapboxgl.Popup({ offset: 30 }).setHTML(popupHTML))
         .addTo(map);
 
     marker.getElement().addEventListener('click', () => {
@@ -211,6 +496,14 @@ function createPOIMarker(poi) {
                     if (confirm(`هل أنت متأكد أنك تريد حذف نقطة الاهتمام "${poi.name}"؟`)) {
                         socket.emit('deletePOI', { poiId: poi._id });
                     }
+                });
+            }
+            const coordIcon = document.querySelector(`.coord-display-icon[data-coords="${poi.location.coordinates.join(',')}"]`);
+            if (coordIcon) {
+                coordIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const coords = e.target.dataset.coords.split(',');
+                    alert(`إحداثيات "${poi.name}":\nخط الطول: ${coords[0]}\nخط العرض: ${coords[1]}`);
                 });
             }
         }, 100);
@@ -232,15 +525,31 @@ function createMeetingPointMarker(data) {
     el.className = 'meeting-point-marker';
     el.innerHTML = `<i class="fas fa-handshake"></i>`;
 
+    const popupHTML = `
+        <h3>
+            نقطة تجمع: ${point.name}
+            <i class="fas fa-question-circle coord-display-icon" data-coords="${point.location.coordinates.join(',')}" title="عرض الإحداثيات"></i>
+        </h3>
+        <p>أنشأها: ${creatorName}</p>
+        ${point.expiresAt ? `<p><i class="fas fa-clock"></i> تنتهي في: ${new Date(point.expiresAt).toLocaleString()}</p>` : ''}
+    `;
+
     const marker = new mapboxgl.Marker(el)
         .setLngLat(point.location.coordinates)
-        .setPopup(new mapboxgl.Popup({ offset: 35 }).setHTML(`
-            <h3>نقطة تجمع: ${point.name}</h3>
-            <p>أنشأها: ${creatorName}</p>
-            ${point.expiresAt ? `<p><i class="fas fa-clock"></i> تنتهي في: ${new Date(point.expiresAt).toLocaleString()}</p>` : ''}
-        `))
+        .setPopup(new mapboxgl.Popup({ offset: 40 }).setHTML(popupHTML))
         .addTo(map);
-    
+
+    marker.getPopup().on('open', () => {
+        const coordIcon = document.querySelector(`.coord-display-icon[data-coords="${point.location.coordinates.join(',')}"]`);
+        if (coordIcon) {
+            coordIcon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const coords = e.target.dataset.coords.split(',');
+                alert(`إحداثيات "${point.name}":\nخط الطول: ${coords[0]}\nخط العرض: ${coords[1]}`);
+            });
+        }
+    });
+
     meetingPointMarkers[creatorId] = marker;
 }
 
@@ -253,10 +562,9 @@ function createMoazebMarker(moazeb) {
 
     const el = document.createElement('div');
     el.className = 'moazeb-marker';
-    
-    // تحديد أيقونة حسب نوع المكان مع لون أخضر
+
     let iconClass;
-    switch(moazeb.type) {
+    switch (moazeb.type) {
         case 'mawkib': iconClass = 'fas fa-flag'; break;
         case 'hussainiya': iconClass = 'fas fa-place-of-worship'; break;
         case 'tent': iconClass = 'fas fa-campground'; break;
@@ -265,16 +573,14 @@ function createMoazebMarker(moazeb) {
         case 'food': iconClass = 'fas fa-utensils'; break;
         default: iconClass = 'fas fa-home';
     }
-    
-    // إنشاء العنصر بنفس نمط POI ولكن بلون أخضر
+
     el.innerHTML = `
         <div class="moazeb-icon-container">
             <i class="${iconClass}"></i>
         </div>
     `;
 
-    // إضافة ستايل مباشر للون الأخضر
-    el.style.backgroundColor = '#006400'; // أخضر داكن
+    el.style.backgroundColor = '#006400';
     el.style.color = 'white';
     el.style.borderRadius = '50%';
     el.style.width = '30px';
@@ -284,21 +590,29 @@ function createMoazebMarker(moazeb) {
     el.style.justifyContent = 'center';
     el.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
 
+    const popupHTML = `
+        <h3>
+            ${moazeb.name}
+             <i class="fas fa-question-circle coord-display-icon" data-coords="${moazeb.location.coordinates.join(',')}" title="عرض الإحداثيات"></i>
+        </h3>
+        <p><i class="fas fa-phone"></i> ${moazeb.phone}</p>
+        <p><i class="fas fa-map-marker-alt"></i> ${moazeb.address}</p>
+        <p><i class="fas fa-city"></i> ${moazeb.governorate} - ${moazeb.district}</p>
+        <button class="link-to-moazeb-btn" data-moazeb-id="${moazeb._id}">
+            <i class="fas fa-link"></i> الربط بالمضيف
+        </button>
+        ${currentUser && currentUser.linkedMoazeb && currentUser.linkedMoazeb.moazebId === moazeb._id ?
+            `<button class="unlink-from-moazeb-btn" data-moazeb-id="${moazeb._id}">
+                <i class="fas fa-unlink"></i> إلغاء الربط
+            </button>` : ''}
+        <button class="locate-moazeb-btn" data-moazeb-id="${moazeb._id}">
+            <i class="fas fa-map-marker-alt"></i> تحديد الموقع
+        </button>
+    `;
+
     const marker = new mapboxgl.Marker(el)
         .setLngLat(moazeb.location.coordinates)
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
-            <h3>${moazeb.name}</h3>
-            <p><i class="fas fa-phone"></i> ${moazeb.phone}</p>
-            <p><i class="fas fa-map-marker-alt"></i> ${moazeb.address}</p>
-            <p><i class="fas fa-city"></i> ${moazeb.governorate} - ${moazeb.district}</p>
-            <button class="link-to-moazeb-btn" data-moazeb-id="${moazeb._id}">
-                <i class="fas fa-link"></i> الربط بالمضيف
-            </button>
-            ${currentUser && currentUser.linkedMoazeb && currentUser.linkedMoazeb.moazebId === moazeb._id ? 
-                `<button class="unlink-from-moazeb-btn" data-moazeb-id="${moazeb._id}">
-                    <i class="fas fa-unlink"></i> إلغاء الربط
-                </button>` : ''}
-        `))
+        .setPopup(new mapboxgl.Popup({ offset: 30 }).setHTML(popupHTML))
         .addTo(map);
 
     marker.getElement().addEventListener('click', () => {
@@ -312,7 +626,7 @@ function createMoazebMarker(moazeb) {
                     }
                 });
             }
-            
+
             const unlinkBtn = document.querySelector(`.unlink-from-moazeb-btn[data-moazeb-id="${moazeb._id}"]`);
             if (unlinkBtn) {
                 unlinkBtn.addEventListener('click', (e) => {
@@ -320,6 +634,28 @@ function createMoazebMarker(moazeb) {
                     if (confirm(`هل تريد إلغاء الربط مع المضيف ${moazeb.name}؟`)) {
                         socket.emit('unlinkFromMoazeb');
                     }
+                });
+            }
+
+            const locateBtn = document.querySelector(`.locate-moazeb-btn[data-moazeb-id="${moazeb._id}"]`);
+            if (locateBtn) {
+                locateBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    map.flyTo({
+                        center: moazeb.location.coordinates,
+                        zoom: 15,
+                        pitch: 45,
+                        bearing: -17.6
+                    });
+                });
+            }
+
+            const coordIcon = document.querySelector(`.coord-display-icon[data-coords="${moazeb.location.coordinates.join(',')}"]`);
+            if (coordIcon) {
+                coordIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const coords = e.target.dataset.coords.split(',');
+                    alert(`إحداثيات "${moazeb.name}":\nخط الطول: ${coords[0]}\nخط العرض: ${coords[1]}`);
                 });
             }
         }, 100);
@@ -330,7 +666,6 @@ function createMoazebMarker(moazeb) {
 }
 
 function drawMoazebConnectionLine(connectionLine) {
-    // إزالة الطبقة القديمة إذا كانت موجودة
     if (moazebConnectionLayerId && map.getLayer(moazebConnectionLayerId)) {
         map.removeLayer(moazebConnectionLayerId);
         map.removeSource(moazebConnectionLayerId);
@@ -338,10 +673,8 @@ function drawMoazebConnectionLine(connectionLine) {
 
     if (!connectionLine || connectionLine.length < 2) return;
 
-    // إنشاء معرف فريد للطبقة
     moazebConnectionLayerId = 'moazeb-connection-' + Date.now();
 
-    // إضافة مصدر جديد للخط
     map.addSource(moazebConnectionLayerId, {
         type: 'geojson',
         data: {
@@ -354,7 +687,6 @@ function drawMoazebConnectionLine(connectionLine) {
         }
     });
 
-    // إضافة الطبقة الجديدة
     map.addLayer({
         id: moazebConnectionLayerId,
         type: 'line',
@@ -364,9 +696,9 @@ function drawMoazebConnectionLine(connectionLine) {
             'line-cap': 'round'
         },
         paint: {
-            'line-color': '#FFA500', // لون برتقالي
+            'line-color': '#FFA500',
             'line-width': 4,
-            'line-dasharray': [2, 2] // خط متقطع
+            'line-dasharray': [2, 2]
         }
     });
 }
@@ -375,15 +707,11 @@ function clearAllDynamicMarkers() {
     Object.values(poiMarkers).forEach(marker => marker.remove());
     Object.keys(poiMarkers).forEach(key => delete poiMarkers[key]);
 
-    Object.values(meetingPointMarkers).forEach(marker => marker.remove());
-    Object.keys(meetingPointMarkers).forEach(key => delete meetingPointMarkers[key]);
-
     Object.values(moazebMarkers).forEach(marker => marker.remove());
     Object.keys(moazebMarkers).forEach(key => delete moazebMarkers[key]);
-    
+
     clearHistoricalPath();
-    
-    // إزالة خط الربط مع المضيف
+
     if (moazebConnectionLayerId && map.getLayer(moazebConnectionLayerId)) {
         map.removeLayer(moazebConnectionLayerId);
         map.removeSource(moazebConnectionLayerId);
@@ -392,37 +720,22 @@ function clearAllDynamicMarkers() {
 }
 
 function showGeneralMap() {
-    Object.values(friendMarkers).forEach(marker => marker.remove());
-    Object.keys(friendMarkers).forEach(key => delete friendMarkers[key]);
-    if (currentUser && currentUser.linkedFriends) {
-        currentUser.linkedFriends.forEach(friendId => {
-            const layerId = `line-${currentUser.userId}-${friendId}`;
-             if (map.getSource(layerId)) {
-                map.removeLayer(layerId);
-                map.removeSource(layerId);
-            }
-        });
-    }
-
-    clearAllDynamicMarkers();
-
-    holySites.forEach(site => {
-        if (!site.marker) {
-            const el = document.createElement('div');
-            el.className = 'holy-site-marker';
-            el.innerHTML = site.icon;
-            site.marker = new mapboxgl.Marker(el)
-                .setLngLat(site.coords)
-                .setPopup(new mapboxgl.Popup().setHTML(`<h3>${site.name}</h3><p>موقع مهم</p>`))
-                .addTo(map);
-        } else {
-            site.marker.addTo(map);
+    linkedFriends.forEach(friend => {
+        const layerId = `route-${currentUser.userId}-${friend.userId}`;
+        if (map.getLayer(layerId)) {
+            map.removeLayer(layerId);
+        }
+        if (map.getSource(layerId)) {
+            map.removeSource(layerId);
         }
     });
 
-    socket.emit('requestPOIs');
+    Object.values(friendMarkers).forEach(marker => marker.remove());
+    Object.keys(friendMarkers).forEach(key => delete friendMarkers[key]);
 
-    drawGeneralPaths();
+    clearAllDynamicMarkers();
+
+    socket.emit('requestPOIs');
 
     map.flyTo({
         center: [43.6875, 33.3152],
@@ -432,57 +745,97 @@ function showGeneralMap() {
     });
 }
 
-function showFriendsMap() {
-    holySites.forEach(site => {
-        if (site.marker) site.marker.remove();
-    });
-    if (map.getSource('general-paths')) {
-        map.removeLayer('general-paths');
-        map.removeSource('general-paths');
-    }
+// نسخة محسنة من showFriendsMap
+async function showFriendsMap() {
     clearAllDynamicMarkers();
 
     Object.values(friendMarkers).forEach(marker => marker.remove());
     Object.keys(friendMarkers).forEach(key => delete friendMarkers[key]);
-    
-    if (currentUser && currentUser.location && currentUser.location.coordinates && !currentUser.settings.stealthMode && currentUser.settings.shareLocation) {
-        createCustomMarker(currentUser);
+
+    if (currentUser?.linkedFriends) {
+        currentUser.linkedFriends.forEach(friendId => {
+            const layerId = `route-${currentUser.userId}-${friendId}`;
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+            if (map.getSource(layerId)) map.removeSource(layerId);
+        });
     }
-    
+
+    const bounds = new mapboxgl.LngLatBounds();
+    const visibleUsers = [];
+
+    // إضافة المستخدم الحالي إذا كان مشاركًا لموقعه
+    if (currentUser?.location?.coordinates && currentUser.settings.shareLocation && !currentUser.settings.stealthMode) {
+        createCustomMarker(currentUser);
+        visibleUsers.push(currentUser);
+        bounds.extend(currentUser.location.coordinates);
+    }
+
+    // إضافة الأصدقاء المرتبطين
     linkedFriends.forEach(friend => {
-        if (friend.location && friend.location.coordinates && friend.settings && friend.settings.shareLocation && !friend.settings.stealthMode) {
+        if (friend?.location?.coordinates && friend.settings.shareLocation && !friend.settings.stealthMode) {
             createCustomMarker(friend);
+            visibleUsers.push(friend);
+            bounds.extend(friend.location.coordinates);
+
+            // إضافة نقاط التجمع للأصدقاء
+            if (friend.meetingPoint?.location?.coordinates) {
+                createMeetingPointMarker({
+                    creatorId: friend.userId,
+                    creatorName: friend.name,
+                    point: friend.meetingPoint
+                });
+            }
         }
     });
 
-    if (currentUser && currentUser.location && currentUser.location.coordinates && !currentUser.settings.stealthMode && currentUser.settings.shareLocation) {
+    // رسم المسارات بين المستخدم الحالي وأصدقائه
+    const routePromises = [];
+    if (currentUser?.location?.coordinates && currentUser.settings.shareLocation && !currentUser.settings.stealthMode) {
         linkedFriends.forEach(friend => {
-            if (friend.location && friend.location.coordinates && friend.settings && friend.settings.shareLocation && !friend.settings.stealthMode) {
-                drawConnectionLine(currentUser.location.coordinates, friend.location.coordinates, `line-${currentUser.userId}-${friend.userId}`);
+            if (friend?.location?.coordinates && friend.settings.shareLocation && !friend.settings.stealthMode) {
+                const layerId = `route-${currentUser.userId}-${friend.userId}`;
+                routePromises.push(drawRoadRouteBetweenPoints(currentUser.location.coordinates, friend.location.coordinates, layerId));
             }
         });
     }
 
-    if (currentUser) {
-        const allVisibleCoords = [];
-        if (currentUser.location && currentUser.location.coordinates && (currentUser.location.coordinates[0] !== 0 || currentUser.location.coordinates[1] !== 0)) {
-            allVisibleCoords.push(currentUser.location.coordinates);
-        }
-        linkedFriends.forEach(f => {
-            if (f.location && f.location.coordinates && f.settings.shareLocation && !f.settings.stealthMode && (f.location.coordinates[0] !== 0 || f.location.coordinates[1] !== 0)) {
-                allVisibleCoords.push(f.location.coordinates);
+    // انتظار اكتمال جميع وعود رسم المسارات
+    try {
+        const routeGeometries = await Promise.all(routePromises);
+        
+        // توسيع الحدود لتشمل جميع المسارات
+        routeGeometries.forEach(geometry => {
+            if (geometry) {
+                geometry.coordinates.forEach(coord => bounds.extend(coord));
             }
         });
 
-        if (allVisibleCoords.length > 1) {
-            const bounds = new mapboxgl.LngLatBounds();
-            allVisibleCoords.forEach(coord => bounds.extend(coord));
-            map.fitBounds(bounds, { padding: 80, pitch: 45, bearing: -17.6 });
-        } else if (allVisibleCoords.length === 1) {
-            map.flyTo({ center: allVisibleCoords[0], zoom: 14, pitch: 45, bearing: -17.6 });
+        // ضبط عرض الخريطة
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds, { 
+                padding: 80, 
+                pitch: 45, 
+                bearing: -17.6, 
+                maxZoom: 15,
+                duration: 1000 // إضافة حركة سلسة
+            });
+        } else if (visibleUsers.length === 1) {
+            map.flyTo({ 
+                center: visibleUsers[0].location.coordinates, 
+                zoom: 14, 
+                pitch: 45, 
+                bearing: -17.6,
+                duration: 1000
+            });
         } else {
-             map.flyTo({ center: [43.6875, 33.3152], zoom: 6 });
+            map.flyTo({ 
+                center: [43.6875, 33.3152], 
+                zoom: 6,
+                duration: 1000
+            });
         }
+    } catch (error) {
+        console.error('خطأ في عرض خريطة الأصدقاء:', error);
     }
 }
 
@@ -490,33 +843,45 @@ function showAllMoazebOnMap() {
     socket.emit('getAllMoazeb');
 }
 
-function drawGeneralPaths() {
-    const pathCoordinates = [].filter(Boolean);
-    if (pathCoordinates.length < 2) {
-        if (map.getSource('general-paths')) {
-            map.removeLayer('general-paths');
-            map.removeSource('general-paths');
-        }
-        return;
-    }
-    const geojson = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'LineString', 'coordinates': pathCoordinates}};
-    if (map.getSource('general-paths')) {
-        map.getSource('general-paths').setData(geojson);
-    } else {
-        map.addSource('general-paths', {'type': 'geojson', 'data': geojson});
-        map.addLayer({'id': 'general-paths', 'type': 'line', 'source': 'general-paths', 'layout': {'line-join': 'round', 'line-cap': 'round'}, 'paint': {'line-color': '#8A2BE2', 'line-width': 5, 'line-opacity': 0.7}});
-    }
-}
+async function drawRoadRouteBetweenPoints(startCoords, endCoords, layerId) {
+    if (!startCoords || !endCoords) return null;
 
-function drawConnectionLine(startCoords, endCoords, layerId) {
-    if (!startCoords || !endCoords) return;
-    const geojson = { 'type': 'Feature', 'properties': {}, 'geometry': { 'type': 'LineString', 'coordinates': [startCoords, endCoords] } };
-    if (map.getSource(layerId)) {
-        map.getSource(layerId).setData(geojson);
-    } else {
-        map.addSource(layerId, { 'type': 'geojson', 'data': geojson });
-        map.addLayer({ 'id': layerId, 'type': 'line', 'source': layerId, 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': '#007bff', 'line-width': 4, 'line-dasharray': [0.5, 2] } });
+    if (map.getLayer(layerId)) map.removeLayer(layerId);
+    if (map.getSource(layerId)) map.removeSource(layerId);
+
+    try {
+        const response = await fetch(
+            `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.join(',')};${endCoords.join(',')}?` +
+            `geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+        );
+        const data = await response.json();
+
+        if (data.routes && data.routes.length > 0) {
+            const routeGeometry = data.routes[0].geometry;
+
+            map.addSource(layerId, {
+                'type': 'geojson',
+                'data': {
+                    'type': 'Feature',
+                    'properties': {},
+                    'geometry': routeGeometry
+                }
+            });
+
+            map.addLayer({
+                'id': layerId,
+                'type': 'line',
+                'source': layerId,
+                'layout': { 'line-join': 'round', 'line-cap': 'round' },
+                'paint': { 'line-color': '#007bff', 'line-width': 4, 'line-dasharray': [0.5, 2] }
+            });
+
+            return routeGeometry;
+        }
+    } catch (error) {
+        console.error(`خطأ في رسم المسار ${layerId}:`, error);
     }
+    return null;
 }
 
 function clearHistoricalPath() {
@@ -609,6 +974,46 @@ function playSOSSound() {
     }
 }
 
+function playProximitySound() {
+    if (currentUser && currentUser.settings.sound && !proximityAlertPlayed) {
+        const audio = new Audio('https://www.soundjay.com/mechanical/sounds/car-horn-01.mp3');
+        audio.play().catch(e => console.error("Error playing sound:", e));
+        proximityAlertPlayed = true;
+        setTimeout(() => { proximityAlertPlayed = false; }, 30000);
+    }
+}
+
+function playPrayerSound() {
+    if (currentUser && currentUser.settings.sound && !prayerAlertPlayed) {
+        const audio = new Audio('https://www.soundjay.com/religious/sounds/adhan-azan-01.mp3');
+        audio.play().catch(e => console.error("Error playing sound:", e));
+        prayerAlertPlayed = true;
+        setTimeout(() => { prayerAlertPlayed = false; }, 60000);
+    }
+}
+
+function convertTimeToMinutes(timeStr) {
+    const [time, period] = timeStr.split(' ');
+    const [hours, minutes] = time.split(':').map(Number);
+    let totalMinutes = hours * 60 + minutes;
+    if (period === 'PM' && hours !== 12) totalMinutes += 720;
+    if (period === 'AM' && hours === 12) totalMinutes -= 720;
+    return totalMinutes;
+}
+
+function checkPrayerTime(prayerTime) {
+    if (!prayerTime || prayerTime === lastPrayerTime) return;
+
+    lastPrayerTime = prayerTime;
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const prayerMinutes = convertTimeToMinutes(prayerTime);
+
+    if (Math.abs(currentTime - prayerMinutes) < 5) {
+        playPrayerSound();
+    }
+}
+
 function sendMessageFromBottomBar() {
     const bottomChatInput = document.getElementById('bottomChatInput');
     const messageText = bottomChatInput.value.trim();
@@ -622,7 +1027,7 @@ function sendMessageFromBottomBar() {
     }
     if (messageText) {
         if (document.getElementById('chatPanel').classList.contains('active')) {
-             addChatMessage(currentUser.name, messageText, 'sent', new Date());
+            addChatMessage(currentUser.name, messageText, 'sent', new Date());
         }
         socket.emit('chatMessage', {
             senderId: currentUser.userId,
@@ -657,7 +1062,7 @@ function showMessageBubble(userId, messageText) {
         bubble.classList.add('show');
         activeMessageTimers[userId] = setTimeout(() => {
             bubble.classList.remove('show');
-        }, 30000); // 30 ثانية بدلاً من الاختفاء الفوري
+        }, 30000);
     }
 }
 
@@ -724,7 +1129,7 @@ function setupBottomChatBar() {
             bottomChatFriendSelect.appendChild(option);
         });
         if (!currentChatFriendId || !linkedFriends.some(f => f.userId === currentChatFriendId)) {
-             currentChatFriendId = linkedFriends[0].userId;
+            currentChatFriendId = linkedFriends[0].userId;
         }
         bottomChatFriendSelect.value = currentChatFriendId;
         bottomChatBar.classList.add('active');
@@ -741,7 +1146,7 @@ function updateMyCreationsList() {
     const poisListContainer = document.getElementById('userPOIsList');
     if (!listContainer || !poisListContainer || !currentUser) return;
 
-    listContainer.innerHTML = ''; 
+    listContainer.innerHTML = '';
     poisListContainer.innerHTML = '';
 
     let contentAdded = false;
@@ -764,16 +1169,14 @@ function updateMyCreationsList() {
             const li = document.createElement('li');
             li.textContent = `${poi.name} (${poi.category})`;
             ul.appendChild(li);
-            
-            // Add to POIs list with delete button
+
             const poiLi = document.createElement('li');
             poiLi.innerHTML = `${poi.name} (${poi.category}) 
                 <button class="delete-poi-btn-small" data-poi-id="${poi._id}">
                     <i class="fas fa-trash"></i>
                 </button>`;
             poisListContainer.appendChild(poiLi);
-            
-            // Add event listener for delete button
+
             poiLi.querySelector('.delete-poi-btn-small').addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (confirm(`هل أنت متأكد أنك تريد حذف نقطة الاهتمام "${poi.name}"؟`)) {
@@ -787,6 +1190,157 @@ function updateMyCreationsList() {
 
     if (!contentAdded) {
         listContainer.innerHTML = '<p class="feature-info">لم تقم بإضافة أي نقاط تجمع أو اهتمام بعد.</p>';
+    }
+}
+
+function toggleAllMarkers(show = true) {
+    const displayStyle = show ? 'flex' : 'none';
+    const markerCollections = [friendMarkers, poiMarkers, meetingPointMarkers, moazebMarkers];
+    markerCollections.forEach(collection => {
+        Object.values(collection).forEach(marker => {
+            if (marker && typeof marker.getElement === 'function') {
+                marker.getElement().style.display = displayStyle;
+            }
+        });
+    });
+}
+
+function captureMap() {
+    const altitude = map.getFreeCameraOptions().position.altitude;
+    const canvas = map.getCanvas();
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+
+    tempCtx.drawImage(canvas, 0, 0);
+
+    tempCtx.font = "bold 24px Cairo";
+    tempCtx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    tempCtx.fillRect(10, tempCanvas.height - 50, 280, 40);
+    tempCtx.fillStyle = "white";
+    tempCtx.textAlign = "right";
+    tempCtx.fillText(`ارتفاع الكاميرا: ${altitude.toFixed(0)} متر`, 280, tempCanvas.height - 20);
+
+    const dataURL = tempCanvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = dataURL;
+    link.download = `tareeq_aljannah_map_${new Date().toISOString()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function setupMapControls() {
+    const controlsDiv = document.createElement('div');
+    controlsDiv.className = 'map-controls';
+
+    const zoomInBtn = document.createElement('button');
+    zoomInBtn.className = 'map-control-btn';
+    zoomInBtn.innerHTML = '<i class="fas fa-plus"></i>';
+    zoomInBtn.title = 'تكبير';
+    zoomInBtn.addEventListener('click', () => map.zoomIn());
+
+    const zoomOutBtn = document.createElement('button');
+    zoomOutBtn.className = 'map-control-btn';
+    zoomOutBtn.innerHTML = '<i class="fas fa-minus"></i>';
+    zoomOutBtn.title = 'تصغير';
+    zoomOutBtn.addEventListener('click', () => map.zoomOut());
+
+    const rotateBtn = document.createElement('button');
+    rotateBtn.className = 'map-control-btn';
+    rotateBtn.innerHTML = '<i class="fas fa-compass"></i>';
+    rotateBtn.title = 'إعادة توجيه الخريطة';
+    rotateBtn.addEventListener('click', () => map.resetNorthPitch());
+
+    const toggleHeaderBtn = document.createElement('button');
+    toggleHeaderBtn.className = 'map-control-btn';
+    toggleHeaderBtn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    toggleHeaderBtn.title = 'إخفاء/إظهار الشريط العلوي';
+    toggleHeaderBtn.addEventListener('click', () => {
+        document.body.classList.toggle('header-hidden');
+        setTimeout(() => map.resize(), 300);
+    });
+
+    const captureBtn = document.createElement('button');
+    captureBtn.className = 'map-control-btn';
+    captureBtn.innerHTML = '<i class="fas fa-camera"></i>';
+    captureBtn.title = 'التقاط صورة للخريطة';
+    captureBtn.addEventListener('click', captureMap);
+
+    const styleSwitcherBtn = document.createElement('button');
+    styleSwitcherBtn.className = 'map-control-btn';
+    styleSwitcherBtn.innerHTML = '<i class="fas fa-layer-group"></i>';
+    styleSwitcherBtn.title = 'تغيير نمط الخريطة';
+
+    const styleSwitcherContainer = document.createElement('div');
+    styleSwitcherContainer.id = 'map-style-switcher';
+
+    const styles = [
+        { name: 'شوارع', id: 'mapbox://styles/mapbox/streets-v11' },
+        { name: 'قمر صناعي', id: 'mapbox://styles/mapbox/satellite-streets-v12' },
+        { name: 'تضاريس', id: 'mapbox://styles/mapbox/outdoors-v12' }
+    ];
+
+    styles.forEach(style => {
+        const btn = document.createElement('button');
+        btn.className = 'style-btn';
+        btn.textContent = style.name;
+        btn.dataset.styleId = style.id;
+        if (map.getStyle().sprite.includes(style.id)) btn.classList.add('active');
+
+        btn.addEventListener('click', () => {
+            map.setStyle(style.id);
+            document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+        styleSwitcherContainer.appendChild(btn);
+    });
+
+    styleSwitcherBtn.addEventListener('click', () => {
+        styleSwitcherContainer.classList.toggle('active');
+    });
+
+    controlsDiv.appendChild(zoomInBtn);
+    controlsDiv.appendChild(zoomOutBtn);
+    controlsDiv.appendChild(rotateBtn);
+    controlsDiv.appendChild(toggleHeaderBtn);
+    controlsDiv.appendChild(captureBtn);
+    controlsDiv.appendChild(styleSwitcherBtn);
+    controlsDiv.appendChild(styleSwitcherContainer);
+
+    document.getElementById('map').appendChild(controlsDiv);
+}
+
+function updateFriendsPanelList() {
+    const friendsListEl = document.getElementById('friendsList');
+    if (!friendsListEl) return;
+
+    friendsListEl.innerHTML = '';
+    if (linkedFriends.length > 0) {
+        linkedFriends.forEach(friend => {
+            const li = document.createElement('li');
+            li.innerHTML = `<img src="${friend.photo}" style="width:30px; height:30px; border-radius:50%;"> <span>${friend.name}</span> <span style="margin-right: auto; font-size: 0.9em; color: #666;">${friend.batteryStatus || 'N/A'}</span> <button class="unfriend-in-list-btn" data-friend-id="${friend.userId}"><i class="fas fa-user-minus"></i></button>`;
+            friendsListEl.appendChild(li);
+        });
+        document.querySelectorAll('.unfriend-in-list-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const friendIdToUnlink = e.currentTarget.dataset.friendId;
+                const friendName = linkedFriends.find(f => f.userId === friendIdToUnlink)?.name || 'هذا الصديق';
+                if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friendName}؟`)) {
+                    socket.emit('unfriendUser', { friendId: friendIdToUnlink });
+                }
+            });
+        });
+    } else {
+        friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
+    }
+}
+
+// إضافة وظيفة مساعدة للتأكد من تحديث بيانات الأصدقاء
+function refreshFriendsData() {
+    if (currentUser && currentUser.linkedFriends && currentUser.linkedFriends.length > 0) {
+        socket.emit('requestFriendsData', { friendIds: currentUser.linkedFriends });
     }
 }
 
@@ -808,7 +1362,6 @@ socket.on('connect', () => {
 
 socket.on('currentUserData', (user) => {
     currentUser = user;
-    console.log('تم استقبال بيانات المستخدم الحالي من الخادم:', currentUser);
     localStorage.setItem('appUserId', currentUser.userId);
     localStorage.setItem('appUserName', currentUser.name);
     localStorage.setItem('appUserPhoto', currentUser.photo);
@@ -851,36 +1404,65 @@ socket.on('currentUserData', (user) => {
 socket.on('locationUpdate', (data) => {
     let userToUpdate;
     if (currentUser && data.userId === currentUser.userId) {
-        currentUser.location = { type: 'Point', coordinates: data.location };
         userToUpdate = currentUser;
     } else {
         userToUpdate = linkedFriends.find(f => f.userId === data.userId);
     }
-    
+
     if (userToUpdate) {
         Object.assign(userToUpdate, data);
         userToUpdate.location = { type: 'Point', coordinates: data.location };
-        if (!userToUpdate.settings.shareLocation || userToUpdate.settings.stealthMode) {
-            if (friendMarkers[userToUpdate.userId]) {
-                friendMarkers[userToUpdate.userId].remove();
-                delete friendMarkers[userToUpdate.userId];
+
+        const marker = friendMarkers[userToUpdate.userId];
+        const isFriendsMapActive = document.getElementById('showFriendsMapBtn').classList.contains('active');
+        const shouldBeVisible = userToUpdate.settings.shareLocation && !userToUpdate.settings.stealthMode;
+
+        if (isFriendsMapActive && shouldBeVisible) {
+            if (marker) {
+                marker.setLngLat(userToUpdate.location.coordinates);
+            } else {
+                createCustomMarker(userToUpdate);
             }
         } else {
-            if (userToUpdate.location && userToUpdate.location.coordinates) {
-                 createCustomMarker(userToUpdate);
+            if (marker) {
+                marker.remove();
+                delete friendMarkers[userToUpdate.userId];
             }
         }
-    }
-    if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
-       showFriendsMap();
+
+        if (currentUser && currentUser.location && currentUser.location.coordinates &&
+            userToUpdate.userId !== currentUser.userId &&
+            userToUpdate.location && userToUpdate.location.coordinates) {
+
+            const distance = calculateDistance(
+                currentUser.location.coordinates[1], currentUser.location.coordinates[0],
+                userToUpdate.location.coordinates[1], userToUpdate.location.coordinates[0]
+            );
+
+            if (distance < 1) {
+                playProximitySound();
+            }
+        }
+
+        if (isFriendsMapActive && currentUser && currentUser.userId !== userToUpdate.userId && shouldBeVisible) {
+            const currentUserIsVisible = currentUser.settings.shareLocation && !currentUser.settings.stealthMode;
+            if (currentUserIsVisible && currentUser.location && currentUser.location.coordinates) {
+                const layerId = `route-${currentUser.userId}-${userToUpdate.userId}`;
+                drawRoadRouteBetweenPoints(currentUser.location.coordinates, userToUpdate.location.coordinates, layerId);
+            }
+        }
     }
 });
 
 socket.on('linkStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        togglePanel(null);
-        document.getElementById('showFriendsMapBtn').click();
+        socket.emit('registerUser', { userId: currentUser.userId });
+        setupBottomChatBar();
+        const friendsButton = document.getElementById('showFriendsMapBtn');
+        if (friendsButton) {
+            friendsButton.click();
+        }
     }
 });
 
@@ -899,26 +1481,7 @@ socket.on('updateFriendsList', (friendsData) => {
     }
     setupBottomChatBar();
     if (document.getElementById('connectPanel').classList.contains('active')) {
-        const friendsListEl = document.getElementById('friendsList');
-        friendsListEl.innerHTML = '';
-        if (linkedFriends.length > 0) {
-            linkedFriends.forEach(friend => {
-                const li = document.createElement('li');
-                li.innerHTML = `<img src="${friend.photo}" style="width:30px; height:30px; border-radius:50%;"> <span>${friend.name}</span> <span style="margin-right: auto; font-size: 0.9em; color: #666;">${friend.batteryStatus || 'N/A'}</span> <button class="unfriend-in-list-btn" data-friend-id="${friend.userId}"><i class="fas fa-user-minus"></i></button>`;
-                friendsListEl.appendChild(li);
-            });
-            document.querySelectorAll('.unfriend-in-list-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const friendIdToUnlink = e.currentTarget.dataset.friendId;
-                    const friendName = linkedFriends.find(f => f.userId === friendIdToUnlink)?.name || 'هذا الصديق';
-                    if (confirm(`هل أنت متأكد أنك تريد إلغاء الارتباط بـ ${friendName}؟`)) {
-                        socket.emit('unfriendUser', { friendId: friendIdToUnlink });
-                    }
-                });
-            });
-        } else {
-            friendsListEl.innerHTML = '<li style="text-align: center; color: #777;">لا يوجد أصدقاء مرتبطون.</li>';
-        }
+        updateFriendsPanelList();
     }
     updateFriendBatteryStatus();
 });
@@ -938,10 +1501,11 @@ socket.on('removeUserMarker', (data) => {
         friendMarkers[data.userId].remove();
         delete friendMarkers[data.userId];
     }
-    if (currentUser && map.getSource(`line-${currentUser.userId}-${data.userId}`)) {
-        map.removeLayer(`line-${currentUser.userId}-${data.userId}`);
-        map.removeSource(`line-${currentUser.userId}-${data.userId}`);
-    }
+
+    const layerId = `route-${currentUser.userId}-${data.userId}`;
+    if (map.getLayer(layerId)) map.removeLayer(layerId);
+    if (map.getSource(layerId)) map.removeSource(layerId);
+
     if (document.getElementById('showFriendsMapBtn').classList.contains('active')) {
         showFriendsMap();
     }
@@ -950,8 +1514,18 @@ socket.on('removeUserMarker', (data) => {
 socket.on('poiStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        socket.emit('requestPOIs');
         socket.emit('registerUser', { userId: currentUser.userId });
+    }
+});
+
+socket.on('newPOIAdded', (poi) => {
+    createPOIMarker(poi);
+});
+
+socket.on('poiDeletedBroadcast', (data) => {
+    if (poiMarkers[data.poiId]) {
+        poiMarkers[data.poiId].remove();
+        delete poiMarkers[data.poiId];
     }
 });
 
@@ -1005,7 +1579,9 @@ socket.on('meetingPointCleared', (data) => {
     if (meetingPointMarkers[data.creatorId]) {
         meetingPointMarkers[data.creatorId].remove();
         delete meetingPointMarkers[data.creatorId];
-        alert('تم إنهاء نقطة التجمع.');
+        if (data.creatorId !== currentUser.userId) {
+            alert('تم إنهاء نقطة التجمع.');
+        }
     }
     if (currentUser && data.creatorId === currentUser.userId) {
         document.getElementById('endMeetingPointBtn').style.display = 'none';
@@ -1016,7 +1592,7 @@ socket.on('meetingPointCleared', (data) => {
 
 socket.on('moazebStatus', (data) => {
     alert(data.message);
-    if(data.success) {
+    if (data.success) {
         document.getElementById('addMoazebName').value = '';
         document.getElementById('addMoazebAddress').value = '';
         document.getElementById('addMoazebPhone').value = '';
@@ -1043,15 +1619,32 @@ socket.on('moazebSearchResults', (data) => {
                 <button class="link-to-moazeb-btn" data-moazeb-id="${moazeb._id}">
                     <i class="fas fa-link"></i> الربط بالمضيف
                 </button>
+                <button class="locate-moazeb-btn" data-moazeb-id="${moazeb._id}">
+                    <i class="fas fa-map-marker-alt"></i> تحديد الموقع
+                </button>
             `;
             resultsContainer.appendChild(card);
-            
-            // Add event listener for link button
+
             card.querySelector('.link-to-moazeb-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (confirm(`هل تريد الربط مع المضيف ${moazeb.name}؟`)) {
                     socket.emit('linkToMoazeb', { moazebId: moazeb._id });
                 }
+            });
+
+            card.querySelector('.locate-moazeb-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                map.flyTo({
+                    center: moazeb.location.coordinates,
+                    zoom: 15,
+                    pitch: 45,
+                    bearing: -17.6
+                });
+
+                togglePanel(null);
+
+                document.getElementById('showGeneralMapBtn').classList.add('active');
             });
 
             createMoazebMarker(moazeb);
@@ -1069,11 +1662,11 @@ socket.on('allMoazebData', (data) => {
     if (data.success && data.moazebs) {
         Object.values(moazebMarkers).forEach(m => m.remove());
         Object.keys(moazebMarkers).forEach(k => delete moazebMarkers[k]);
-        
+
         data.moazebs.forEach(moazeb => {
             createMoazebMarker(moazeb);
         });
-        
+
         if (data.moazebs.length > 0) {
             const bounds = new mapboxgl.LngLatBounds();
             data.moazebs.forEach(m => bounds.extend(m.location.coordinates));
@@ -1085,10 +1678,10 @@ socket.on('allMoazebData', (data) => {
 socket.on('linkToMoazebStatus', (data) => {
     alert(data.message);
     if (data.success) {
-        // إظهار خط الربط على الخريطة
         if (data.connectionLine && data.connectionLine.length > 0) {
             drawMoazebConnectionLine(data.connectionLine);
         }
+        socket.emit('registerUser', { userId: currentUser.userId });
     }
 });
 
@@ -1130,14 +1723,22 @@ socket.on('prayerTimesData', (data) => {
     if (data.success) {
         const { Fajr, Dhuhr, Asr, Maghrib, Isha } = data.timings;
         displayElement.innerHTML = `<p><strong>الفجر:</strong> ${Fajr}</p><p><strong>الظهر:</strong> ${Dhuhr}</p><p><strong>العصر:</strong> ${Asr}</p><p><strong>المغرب:</strong> ${Maghrib}</p><p><strong>العشاء:</strong> ${Isha}</p>`;
+
+        checkPrayerTime(Fajr);
+        checkPrayerTime(Dhuhr);
+        checkPrayerTime(Asr);
+        checkPrayerTime(Maghrib);
+        checkPrayerTime(Isha);
     } else {
         displayElement.innerHTML = `<p style="color: var(--danger-color);">${data.message || 'فشل جلب أوقات الصلاة.'}</p>`;
     }
 });
 
 map.on('load', () => {
+    map.setLanguage('ar');
     showGeneralMap();
     document.getElementById('showGeneralMapBtn').classList.add('active');
+    setupMapControls();
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1153,27 +1754,32 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
             return;
         }
+        
+        // تحديث بيانات الأصدقاء قبل العرض
+        refreshFriendsData();
+        
         togglePanel(null);
         document.getElementById('showFriendsMapBtn').classList.add('active');
         showFriendsMap();
+        setupBottomChatBar();
     });
-    
+
     document.getElementById('showAllMoazebBtn').addEventListener('click', () => {
         showAllMoazebOnMap();
     });
-    
+
     document.getElementById('initialInfoConfirmBtn').addEventListener('click', () => {
         const name = document.getElementById('initialInfoNameInput').value.trim();
         const gender = document.getElementById('initialInfoGenderSelect').value;
         const phone = document.getElementById('initialInfoPhoneInput').value.trim();
         const email = document.getElementById('initialInfoEmailInput').value.trim();
-        
+
         if (name && gender !== 'other' && phone && email) {
             if (!validateEmail(email)) {
                 alert('الرجاء إدخال بريد إلكتروني صحيح');
                 return;
             }
-            
+
             localStorage.setItem('appUserName', name);
             localStorage.setItem('appUserGender', gender);
             localStorage.setItem('appUserPhone', phone);
@@ -1189,7 +1795,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function validateEmail(email) {
         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return re.test(email);
+        return re.test(String(email).toLowerCase());
     }
 
     document.getElementById('showProfileBtn').addEventListener('click', () => {
@@ -1229,12 +1835,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('الرجاء إدخال بريد إلكتروني صحيح');
                 return;
             }
-            
+
             currentUser.name = newName;
             currentUser.gender = newGender;
             currentUser.phone = newPhone;
             currentUser.email = newEmail;
-            
+
             localStorage.setItem('appUserName', newName);
             localStorage.setItem('appUserGender', newGender);
             localStorage.setItem('appUserPhone', newPhone);
@@ -1258,6 +1864,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         togglePanel('connectPanel');
+        updateFriendsPanelList();
     });
 
     document.getElementById('connectFriendBtn').addEventListener('click', () => {
@@ -1281,7 +1888,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sendMessageFromBottomBar();
         }
     });
-    
+
     document.getElementById('toggleChatHistoryBtn').addEventListener('click', () => {
         if (!currentUser) {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
@@ -1370,6 +1977,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.getElementById('whatsappHelpBtn').addEventListener('click', () => {
+        const supportNumber = '9647708077310';
+        const message = "السلام عليكم، لدي استفسار بخصوص تطبيق طريق الجنة.";
+        const whatsappUrl = `https://wa.me/${supportNumber}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    });
+
     document.getElementById('sosButton').addEventListener('click', () => {
         if (!currentUser) {
             alert("جاري تحميل بيانات المستخدم. يرجى المحاولة مرة أخرى.");
@@ -1423,7 +2037,7 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.emit('clearMeetingPoint');
         }
     });
-    
+
     document.getElementById('showMoazebBtn').addEventListener('click', () => {
         togglePanel('moazebPanel');
     });
@@ -1500,7 +2114,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('soundToggle').addEventListener('change', (e) => {
-        if (currentUser) socket.emit('updateSettings', { sound: e.target.checked });
+        if (currentUser) {
+            currentUser.settings.sound = e.target.checked;
+            socket.emit('updateSettings', { sound: e.target.checked });
+        }
     });
 
     document.getElementById('hideBubblesToggle').addEventListener('change', (e) => {
@@ -1523,13 +2140,81 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentUser) return;
         const newWhatsapp = document.getElementById('emergencyWhatsappInput').value.trim();
         if (newWhatsapp) {
-             currentUser.settings.emergencyWhatsapp = newWhatsapp;
-             localStorage.setItem('appEmergencyWhatsapp', newWhatsapp);
-             socket.emit('updateSettings', { emergencyWhatsapp: newWhatsapp });
-             alert('تم حفظ رقم الواتساب للطوارئ بنجاح!');
+            currentUser.settings.emergencyWhatsapp = newWhatsapp;
+            localStorage.setItem('appEmergencyWhatsapp', newWhatsapp);
+            socket.emit('updateSettings', { emergencyWhatsapp: newWhatsapp });
+            alert('تم حفظ رقم الواتساب للطوارئ بنجاح!');
         } else {
-             alert('الرجاء إدخال رقم واتساب صحيح.');
+            alert('الرجاء إدخال رقم واتساب صحيح.');
         }
+    });
+
+    document.getElementById('showDirectionsBtn').addEventListener('click', () => {
+        togglePanel('directionsPanel');
+    });
+
+    // 4. الربط بين حقول البحث والدالة الشاملة
+    const mapSearchInput = document.getElementById('mapSearchInput');
+    const searchResults = document.getElementById('searchResults');
+    const endPointInput = document.getElementById('endPointInput');
+
+    async function handleSearchInput(e, resultsContainerId) {
+        const query = e.target.value;
+        const resultsContainer = document.getElementById(resultsContainerId);
+        
+        if (query.length < 2) {
+            resultsContainer.style.display = 'none';
+            return;
+        }
+
+        // استدعاء البحث العالمي والمحلي بالتوازي
+        const [globalResults, localResults] = await Promise.all([
+            searchPlaces(query),
+            searchVisibleFeatures(query)
+        ]);
+        
+        // دمج النتائج مع إزالة التكرار
+        const combinedResults = [...globalResults];
+        const existingPlaceNames = new Set(globalResults.map(r => r.place_name_ar || r.place_name));
+
+        localResults.forEach(localResult => {
+            if (!existingPlaceNames.has(localResult.place_name_ar)) {
+                combinedResults.push(localResult);
+            }
+        });
+
+        displaySearchResults(combinedResults, resultsContainerId);
+    }
+
+    mapSearchInput.addEventListener('input', (e) => handleSearchInput(e, 'searchResults'));
+    endPointInput.addEventListener('input', (e) => handleSearchInput(e, 'endPointSuggestions'));
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-container')) {
+            searchResults.style.display = 'none';
+        }
+        if (!e.target.closest('.directions-section')) {
+            document.getElementById('endPointSuggestions').style.display = 'none';
+        }
+    });
+
+    document.getElementById('setCurrentAsStartBtn').addEventListener('click', () => {
+        if (currentUser && currentUser.location && currentUser.location.coordinates) {
+            routeStartCoords = currentUser.location.coordinates;
+            document.getElementById('startPointInput').value = 'موقعي الحالي';
+        } else {
+            alert('موقعك الحالي غير متاح');
+        }
+    });
+
+    document.getElementById('calculateRouteBtn').addEventListener('click', () => {
+        calculateRoute(routeStartCoords, routeEndCoords);
+        togglePanel(null);
+        document.getElementById('showGeneralMapBtn').classList.add('active');
+    });
+
+    document.getElementById('clearRouteBtn').addEventListener('click', () => {
+        clearRoute();
     });
 
     const mapPitchInput = document.getElementById('mapPitch');
@@ -1543,4 +2228,65 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const searchBtn = document.getElementById('searchBtn');
+    const searchInput = document.getElementById('searchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+
+    async function performSearch() {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        const results = await searchPlaces(query);
+
+        if (results && results.length > 0) {
+            const result = results[0];
+            const coordinates = result.center;
+
+            map.flyTo({
+                center: coordinates,
+                zoom: 14
+            });
+
+            if (searchResultMarker) {
+                searchResultMarker.remove();
+            }
+
+            const el = document.createElement('div');
+            el.className = 'search-result-marker';
+
+            searchResultMarker = new mapboxgl.Marker(el)
+                .setLngLat(coordinates)
+                .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(result.place_name_ar || result.place_name))
+                .addTo(map);
+
+            toggleAllMarkers(false);
+            clearSearchBtn.style.display = 'block';
+
+        } else {
+            alert('لم يتم العثور على نتائج للبحث.');
+        }
+    }
+
+    if (searchBtn) {
+        searchBtn.addEventListener('click', performSearch);
+    }
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    }
+
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', () => {
+            if (searchResultMarker) {
+                searchResultMarker.remove();
+                searchResultMarker = null;
+            }
+            if (searchInput) searchInput.value = '';
+            toggleAllMarkers(true);
+            clearSearchBtn.style.display = 'none';
+        });
+    }
 });

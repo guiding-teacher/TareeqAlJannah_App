@@ -24,6 +24,7 @@ body {
     height: 100vh;
 }
 
+
 .main-header {
     background-image: linear-gradient(to right, #0056b3, var(--primary-color));
     color: white;
@@ -36,7 +37,19 @@ body {
     position: relative;
     direction: rtl;
     unicode-bidi: embed;
+    transition: transform 0.3s ease-in-out;
 }
+
+/* *** بداية الإضافة الجديدة: حالة إخفاء الشريط العلوي *** */
+body.header-hidden .main-header {
+    transform: translateY(-100%);
+}
+
+body.header-hidden #map {
+    height: 100vh;
+}
+/* *** نهاية الإضافة الجديدة *** */
+
 
 .main-header h1 {
     margin: 0;
@@ -112,7 +125,63 @@ body {
     height: calc(100vh - 70px);
     position: relative;
     z-index: 1;
+    transition: height 0.3s ease-in-out;
 }
+
+/* *** بداية الإضافة الجديدة: تنسيقات شريط البحث *** */
+#search-container {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    background-color: var(--panel-bg);
+    padding: 8px;
+    border-radius: 50px;
+    box-shadow: var(--shadow);
+    width: 90%;
+    max-width: 450px;
+}
+
+#searchInput {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 0 15px;
+    font-size: 1.1em;
+    font-family: 'Cairo', sans-serif;
+}
+
+#search-container button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.2em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s ease;
+}
+
+#search-container button:hover {
+    background-color: #0056b3;
+}
+#clearSearchBtn {
+    background-color: var(--danger-color);
+    margin-right: 5px;
+}
+#clearSearchBtn:hover {
+    background-color: #c82333;
+}
+
+/* *** نهاية الإضافة الجديدة *** */
+
 
 .overlay-panel {
     position: absolute;
@@ -209,6 +278,19 @@ body {
     background-color: #c82333;
 }
 
+
+/* style.css - إضافة تنسيق لزر الدعم الفني */
+#whatsappHelpBtn {
+    background-color: #20c997; /* لون أخضر جميل ومميز */
+    border-color: #20c997;
+}
+
+#whatsappHelpBtn:hover {
+    background-color: #1baa80; /* لون أغمق عند المرور */
+    border-color: #1baa80;
+}
+
+
 .profile-info { text-align: center; }
 
 #userPhoto {
@@ -285,9 +367,10 @@ body {
     z-index: 5;
 }
 
+/* *** تعديل: تصغير حجم صورة المستخدم على الخريطة *** */
 .user-marker-photo {
-    width: 60px;
-    height: 60px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     object-fit: cover;
     box-shadow: var(--shadow);
@@ -465,6 +548,108 @@ input:checked + .slider:before { transform: translateX(26px); }
     font-size: 14px;
 }
 
+.map-controls {
+    position: absolute;
+    top: 80px;
+    right: 10px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.map-control-btn {
+    width: 40px;
+    height: 40px;
+    background-color: var(--panel-bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    border: 1px solid #ddd;
+    font-size: 1.2em;
+}
+.map-control-btn:hover {
+    background-color: #f0f0f0;
+}
+
+.moazeb-marker i {
+    font-size: 14px;
+}
+
+/* style.css - إضافة بعض التعديلات */
+.locate-moazeb-btn {
+    background-color: #17a2b8;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    margin-top: 5px;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+}
+
+.locate-moazeb-btn:hover {
+    background-color: #138496;
+}
+
+/* *** بداية الإضافة الجديدة: تنسيقات الميزات الجديدة *** */
+.coord-display-icon {
+    cursor: pointer;
+    color: var(--secondary-color);
+    margin-right: 10px;
+    font-size: 1.1em;
+}
+.coord-display-icon:hover {
+    color: var(--primary-color);
+}
+.mapboxgl-popup-content h3 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#map-style-switcher {
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 5px;
+    background-color: var(--panel-bg);
+    padding: 5px;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+}
+#map-style-switcher.active {
+    display: flex;
+}
+.style-btn {
+    background-color: white;
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-family: 'Cairo', sans-serif;
+}
+.style-btn:hover {
+    background-color: #f0f0f0;
+}
+.style-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.search-result-marker {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="%23dc3545"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>');
+    background-size: cover;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+/* *** نهاية الإضافة الجديدة *** */
 
 
 @media (max-width: 768px) {
@@ -483,4 +668,217 @@ input:checked + .slider:before { transform: translateX(26px); }
     .bottom-chat-bar { padding: 5px; gap: 5px; }
     #bottomChatFriendSelect, #bottomChatInput, #bottomChatSendBtn, #toggleChatHistoryBtn { font-size: 0.8em; padding: 6px; }
     .search-form { grid-template-columns: 1fr; }
+    #search-container { top: 130px; /* Adjust for taller header on mobile */ }
+}
+
+/* ========== أنماط التوجيه والبحث ========== */
+
+/* زر التوجيه */
+#showDirectionsBtn {
+    background-color: #6f42c1;
+    border-color: #6f42c1;
+}
+
+#showDirectionsBtn:hover {
+    background-color: #5a36a0;
+    border-color: #5a36a0;
+}
+
+/* نتائج البحث */
+.search-results-dropdown, .suggestions-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: var(--shadow);
+    direction: rtl;
+    unicode-bidi: embed;
+}
+
+.search-result-item {
+    padding: 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.2s ease;
+}
+
+.search-result-item:hover {
+    background-color: #f8f9fa;
+}
+
+.search-result-item i {
+    color: var(--primary-color);
+}
+
+.search-result-item strong {
+    display: block;
+    font-size: 1em;
+    color: var(--text-color);
+}
+
+.search-result-item small {
+    color: #6c757d;
+    font-size: 0.85em;
+}
+
+/* نافذة التوجيه */
+.directions-section {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    margin-bottom: 15px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.directions-section h3 {
+    margin-top: 0;
+    color: var(--primary-color);
+    font-size: 1.2em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#startPointInput, #endPointInput {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border: 2px solid #ddd;
+    border-radius: var(--border-radius);
+    font-size: 1em;
+    background-color: white;
+}
+
+#startPointInput:focus, #endPointInput:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* أزرار التحكم بالمسار */
+.primary-btn {
+    background-color: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+}
+
+.primary-btn:hover {
+    background-color: #218838 !important;
+}
+
+/* معلومات المسار */
+.route-info {
+    background-color: #e7f3ff;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    border: 1px solid #b3d7ff;
+    margin-top: 15px;
+}
+
+.route-info p {
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.route-info i {
+    color: var(--primary-color);
+}
+
+/* أيقونات البداية والنهاية */
+.mapboxgl-marker .start-icon {
+    background-color: #00FF00;
+    border: 3px solid white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.mapboxgl-marker .end-icon {
+    background-color: #FF0000;
+    border: 3px solid white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+/* المسارات على الخريطة */
+.mapboxgl-layer[id^="route-"] {
+    filter: drop-shadow(0 0 5px rgba(0, 123, 255, 0.5));
+}
+
+/* شريط معلومات المسار المباشر */
+#route-info-bar {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 10px 20px;
+    border-radius: var(--border-radius);
+    z-index: 12;
+    display: none; /* Hidden by default */
+    align-items: center;
+    gap: 20px;
+    box-shadow: var(--shadow);
+    font-size: 1.1em;
+}
+#route-info-bar.active {
+    display: flex;
+}
+#route-info-bar i {
+    color: var(--accent-color);
+}
+/* إضافة إلى style.css */
+.search-result-item .fa-draw-polygon {
+    color: #17a2b8;
+}
+
+.search-result-item .fa-map-marker-alt {
+    color: var(--primary-color);
+}
+
+.search-result-item small {
+    display: block;
+    margin-top: 2px;
+}
+
+/* التكيف مع الشاشات الصغيرة */
+@media (max-width: 768px) {
+    #mapSearchInput {
+        width: 180px;
+        font-size: 0.8em;
+        padding: 8px;
+    }
+    
+    .search-results-dropdown, .suggestions-dropdown {
+        max-height: 200px;
+    }
+    
+    .directions-section {
+        padding: 10px;
+    }
+    
+    .directions-section h3 {
+        font-size: 1em;
+    }
+
+    #route-info-bar {
+        width: 90%;
+        font-size: 0.9em;
+        padding: 8px 12px;
+        gap: 10px;
+    }
 }
