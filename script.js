@@ -627,7 +627,14 @@ function createMoazebMarker(moazeb) {
     el.style.justifyContent = 'center'; 
     el.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
 
-    const isLinkedToThisMoazeb = currentUser && currentUser.linkedMoazeb && currentUser.linkedMoazeb.moazebId._id === moazeb._id;
+    // ==> بداية الإصلاح هنا <==
+    // أضفنا تحققاً للتأكد من وجود currentUser.linkedMoazeb.moazebId قبل قراءة _id
+    const isLinkedToThisMoazeb = currentUser && 
+                                 currentUser.linkedMoazeb && 
+                                 currentUser.linkedMoazeb.moazebId && // هذا هو التحقق الجديد والمهم
+                                 currentUser.linkedMoazeb.moazebId._id === moazeb._id;
+    // ==> نهاية الإصلاح هنا <==
+                                 
     const unlinkButtonHTML = isLinkedToThisMoazeb ? `<button class="unlink-from-moazeb-btn" data-moazeb-id="${moazeb._id}"><i class="fas fa-unlink"></i> إلغاء الربط</button>` : '';
 
     const popupHTML = `
@@ -642,17 +649,14 @@ function createMoazebMarker(moazeb) {
         </div>
     `;
 
-    // ==> بداية التعديل هنا
     const popup = new mapboxgl.Popup({ offset: 30 }).setHTML(popupHTML);
 
     const marker = new mapboxgl.Marker(el)
         .setLngLat(moazeb.location.coordinates)
-        .setPopup(popup) // ربط النافذة بالماركر
+        .setPopup(popup)
         .addTo(map);
 
-    // استخدام حدث 'open' الخاص بالنافذة المنبثقة لربط أحداث الأزرار
     popup.on('open', () => {
-        // نستخدم setTimeout لضمان أن محتوى النافذة قد تم عرضه في DOM
         setTimeout(() => {
             const linkBtn = document.querySelector(`.link-to-moazeb-btn[data-moazeb-id="${moazeb._id}"]`);
             if (linkBtn) linkBtn.addEventListener('click', (e) => { 
@@ -685,7 +689,6 @@ function createMoazebMarker(moazeb) {
             });
         }, 100);
     });
-    // <== نهاية التعديل هنا
 
     moazebMarkers[moazeb._id] = marker;
     return marker;
@@ -732,6 +735,15 @@ function clearAllMapLayers() {
         });
     }
 }
+
+function clearMoazebMarkers() {
+    Object.values(moazebMarkers).forEach(marker => marker.remove());
+    Object.keys(moazebMarkers).forEach(key => delete moazebMarkers[key]);
+}
+
+
+
+
 
 function showGeneralMap() {
     clearRoute();
@@ -784,8 +796,14 @@ async function showFriendsMap() {
 }
 
 // دالة عرض المضيفين (تم الاستبدال من الكود النصي)
-function showAllMoazebOnMap() {
-    socket.emit('getAllMoazeb');
+ function showAllMoazebOnMap() { 
+    togglePanel(null); // أغلق أي لوحة مفتوحة
+    clearAllMapLayers(); // نظف الخريطة بالكامل من كل شيء
+    if (currentUser) {
+        createCustomMarker(currentUser); // أعد إضافة موقع المستخدم الحالي
+    }
+    // لا تقم بإضافة alert هنا، فقط اطلب البيانات
+    socket.emit('getAllMoazeb'); 
 }
 
 async function drawRoadRouteBetweenPoints(startCoords, endCoords, layerId) {
@@ -1509,27 +1527,64 @@ socket.on('moazebStatus', (data) => {
         }
     }
 });
-
 socket.on('moazebSearchResults', (data) => { 
     const container = document.getElementById('moazebResultsContainer'); 
-    container.innerHTML = ''; 
-    clearAllMapLayers(); 
+    if(container) container.innerHTML = ''; // مسح النتائج السابقة من القائمة
+
+    // مسح علامات المضيفين القديمة فقط من الخريطة
+    Object.values(moazebMarkers).forEach(marker => marker.remove());
+    Object.keys(moazebMarkers).forEach(key => delete moazebMarkers[key]);
+
     if (data.success && data.results.length > 0) { 
-        data.results.forEach(moazeb => { 
+        // ==> بداية الإضافة هنا <==
+        // عرض النتائج في القائمة النصية داخل اللوحة
+        data.results.forEach(moazeb => {
+            if (container) {
+                const card = document.createElement('div');
+                card.className = 'moazeb-card'; // استخدم كلاس لتنسيق جميل
+                card.innerHTML = `
+                    <h4>${moazeb.name}</h4>
+                    <p><i class="fas fa-phone"></i> ${moazeb.phone}</p>
+                    <p><i class="fas fa-city"></i> ${moazeb.governorate} - ${moazeb.district}</p>
+                    <div class="card-buttons">
+                        <button class="locate-moazeb-card-btn" data-coords="${moazeb.location.coordinates.join(',')}">
+                            <i class="fas fa-map-marker-alt"></i> تحديد
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            }
+            // عرض النتائج على الخريطة (الكود الحالي)
             createMoazebMarker(moazeb); 
         }); 
+
+        // ربط الأحداث بالأزرار الجديدة في البطاقات
+        document.querySelectorAll('.locate-moazeb-card-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const coords = e.currentTarget.dataset.coords.split(',').map(Number);
+                map.flyTo({ center: coords, zoom: 15 });
+                togglePanel(null); // أغلق اللوحة للانتقال إلى الخريطة
+            });
+        });
+        // ==> نهاية الإضافة هنا <==
+
         const bounds = new mapboxgl.LngLatBounds(); 
-        data.results.forEach(m => bounds.extend(m.location.coordinates)); 
-        map.fitBounds(bounds, { padding: 50 }); 
+        data.results.forEach(m => {
+            if (m.location && m.location.coordinates) {
+               bounds.extend(m.location.coordinates);
+            }
+        }); 
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds, { padding: 80 }); 
+        }
     } else { 
-        container.innerHTML = 'لا توجد نتائج.'; 
+        if (container) container.innerHTML = '<p class="no-results-message">لا توجد نتائج بحث مطابقة.</p>'; 
     } 
 });
 
 socket.on('allMoazebData', (data) => {
     if (data.success && data.moazebs) {
-        Object.values(moazebMarkers).forEach(marker => marker.remove());
-        Object.keys(moazebMarkers).forEach(key => delete moazebMarkers[key]);
+        clearMoazebMarkers(); // ==> الإصلاح: امسح علامات المضيفين القديمة فقط
 
         data.moazebs.forEach(createMoazebMarker);
 

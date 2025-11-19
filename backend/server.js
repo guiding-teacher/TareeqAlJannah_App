@@ -533,28 +533,64 @@ io.on('connection', async (socket) => {
     });
 
     socket.on('searchMoazeb', async (query) => {
-        if (isAdmin) return;
-        try {
-            const searchCriteria = {};
-            if (query.phone) searchCriteria.phone = { $regex: query.phone, $options: 'i' };
-            if (query.governorate) searchCriteria.governorate = { $regex: query.governorate, $options: 'i' };
-            if (query.district) searchCriteria.district = { $regex: query.district, $options: 'i' };
-            const results = await Moazeb.find(searchCriteria).limit(20);
-            socket.emit('moazebSearchResults', { success: true, results });
-        } catch (error) { console.error('❌ خطأ في البحث عن مضيف:', error); }
-    });
+    if (isAdmin) return;
+    try {
+        const searchCriteria = {};
+
+        // ==> بداية الإصلاح: منطق بحث محسّن
+        if (query.phone && query.phone.trim() !== '') {
+            // للبحث عن الهاتف، استخدم المطابقة التامة والدقيقة
+            searchCriteria.phone = query.phone.trim();
+        }
+        
+        if (query.governorate && query.governorate.trim() !== '') {
+            // للمحافظة، استخدم regex للبحث المرن (مثلاً "كربلاء" تطابق "كربلاء المقدسة")
+            searchCriteria.governorate = { $regex: query.governorate.trim(), $options: 'i' };
+        }
+        
+        if (query.district && query.district.trim() !== '') {
+            // للقضاء، استخدم regex أيضاً
+            searchCriteria.district = { $regex: query.district.trim(), $options: 'i' };
+        }
+        // <== نهاية الإصلاح
+
+        // تأكد من أن هناك على الأقل معيار واحد للبحث
+        if (Object.keys(searchCriteria).length === 0) {
+            return socket.emit('moazebSearchResults', { success: true, results: [] });
+        }
+
+        const results = await Moazeb.find(searchCriteria).limit(50); // زيادة الحد إلى 50 نتيجة
+        
+        socket.emit('moazebSearchResults', { success: true, results });
+
+    } catch (error) { 
+        console.error('❌ خطأ في البحث عن مضيف:', error); 
+        socket.emit('moazebSearchResults', { success: false, message: 'حدث خطأ أثناء البحث.' });
+    }
+});
     
     socket.on('getAllMoazeb', async () => {
-        if (isAdmin) return;
-        try {
-            const moazebs = await Moazeb.find({}).limit(500).lean().exec();
-            const validMoazebs = moazebs.filter(m => m.location && m.location.coordinates && Array.isArray(m.location.coordinates) && m.location.coordinates.length === 2 && (m.location.coordinates[0] !== 0 || m.location.coordinates[1] !== 0));
-            socket.emit('allMoazebData', { success: true, moazebs: validMoazebs });
-        } catch (error) {
-            console.error('❌ خطأ في جلب جميع المضيفين:', error);
-            socket.emit('allMoazebData', { success: false, message: 'خطأ في الخادم.' });
-        }
-    });
+    if (isAdmin) return;
+    try {
+        // استخدم .lean() لتحسين الأداء
+        const moazebs = await Moazeb.find({}).limit(500).lean();
+
+        // ==> بداية الإصلاح: فلترة وتحويل البيانات بشكل آمن
+        const validMoazebs = moazebs.filter(m => 
+            m.location &&                                    // تأكد من وجود كائن الموقع
+            Array.isArray(m.location.coordinates) &&         // تأكد من أن الإحداثيات عبارة عن مصفوفة
+            m.location.coordinates.length === 2 &&           // تأكد من أنها تحتوي على خط طول وعرض
+            (m.location.coordinates[0] !== 0 || m.location.coordinates[1] !== 0) // تجاهل المواقع الافتراضية
+        );
+        // <== نهاية الإصلاح
+
+        socket.emit('allMoazebData', { success: true, moazebs: validMoazebs });
+
+    } catch (error) {
+        console.error('❌ خطأ في جلب جميع المضيفين:', error);
+        socket.emit('allMoazebData', { success: false, message: 'خطأ في الخادم أثناء جلب بيانات المضيفين.' });
+    }
+});
 
     socket.on('linkToMoazeb', async (data) => {
         const { moazebId } = data;
