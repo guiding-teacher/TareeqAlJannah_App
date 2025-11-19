@@ -19,9 +19,6 @@ body {
     color: var(--text-color);
     background-color: var(--bg-color);
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
 }
 
 
@@ -34,22 +31,18 @@ body {
     align-items: center;
     box-shadow: var(--shadow);
     z-index: 10;
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
     direction: rtl;
     unicode-bidi: embed;
     transition: transform 0.3s ease-in-out;
 }
 
-/* *** بداية الإضافة الجديدة: حالة إخفاء الشريط العلوي *** */
 body.header-hidden .main-header {
     transform: translateY(-100%);
 }
-
-body.header-hidden #map {
-    height: 100vh;
-}
-/* *** نهاية الإضافة الجديدة *** */
-
 
 .main-header h1 {
     margin: 0;
@@ -81,7 +74,7 @@ body.header-hidden #map {
     transform: translateY(-2px);
 }
 
-.main-header nav button.active {
+.main-header nav buttonsearch-result-item.active {
     background-color: var(--accent-color);
     border-color: var(--accent-color);
     box-shadow: 0 0 10px rgba(40, 167, 69, 0.4);
@@ -120,68 +113,13 @@ body.header-hidden #map {
 }
 
 #map {
-    flex-grow: 1;
-    width: 100%;
-    height: calc(100vh - 70px);
-    position: relative;
-    z-index: 1;
-    transition: height 0.3s ease-in-out;
-}
-
-/* *** بداية الإضافة الجديدة: تنسيقات شريط البحث *** */
-#search-container {
     position: absolute;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    display: flex;
-    background-color: var(--panel-bg);
-    padding: 8px;
-    border-radius: 50px;
-    box-shadow: var(--shadow);
-    width: 90%;
-    max-width: 450px;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 1;
 }
-
-#searchInput {
-    flex-grow: 1;
-    border: none;
-    outline: none;
-    background: transparent;
-    padding: 0 15px;
-    font-size: 1.1em;
-    font-family: 'Cairo', sans-serif;
-}
-
-#search-container button {
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 1.2em;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.3s ease;
-}
-
-#search-container button:hover {
-    background-color: #0056b3;
-}
-#clearSearchBtn {
-    background-color: var(--danger-color);
-    margin-right: 5px;
-}
-#clearSearchBtn:hover {
-    background-color: #c82333;
-}
-
-/* *** نهاية الإضافة الجديدة *** */
-
 
 .overlay-panel {
     position: absolute;
@@ -279,14 +217,13 @@ body.header-hidden #map {
 }
 
 
-/* style.css - إضافة تنسيق لزر الدعم الفني */
 #whatsappHelpBtn {
-    background-color: #20c997; /* لون أخضر جميل ومميز */
+    background-color: #20c997;
     border-color: #20c997;
 }
 
 #whatsappHelpBtn:hover {
-    background-color: #1baa80; /* لون أغمق عند المرور */
+    background-color: #1baa80;
     border-color: #1baa80;
 }
 
@@ -303,16 +240,29 @@ body.header-hidden #map {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-#linkedFriendsList ul { list-style: none; padding: 0; margin: 0; }
-#linkedFriendsList li {
-    padding: 10px 0;
+#linkedFriendsList ul, #previousFriendsList { list-style: none; padding: 0; margin: 0; }
+#linkedFriendsList li, #previousFriendsList li {
+    padding: 10px;
     border-bottom: 1px dashed #eee;
     display: flex;
     align-items: center;
     gap: 12px;
     font-size: 1.1em;
+    background-color: #fff;
+    border-radius: 8px;
+    margin-bottom: 5px;
 }
-#linkedFriendsList li:last-child { border-bottom: none; }
+#linkedFriendsList li:last-child, #previousFriendsList li:last-child { border-bottom: none; }
+.list-item-photo { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.list-item-icon { color: var(--accent-color); font-size: 28px; width: 40px; text-align: center; }
+.list-item-status { margin-right: auto; font-size: 0.9em; color: #666; }
+.unfriend-in-list-btn, .reconnect-in-list-btn, .unlink-moazeb-in-list-btn, .reconnect-moazeb-in-list-btn, .reconnect-previous-btn {
+    padding: 6px 10px; border-radius: 5px; border: none; cursor: pointer; font-size: 0.9em;
+    color: white; margin-left: 5px;
+}
+.unfriend-in-list-btn, .unlink-moazeb-in-list-btn { background-color: var(--danger-color); }
+.reconnect-in-list-btn, .reconnect-moazeb-in-list-btn, .reconnect-previous-btn { background-color: #17a2b8; }
+
 
 #chatMessages {
     height: 250px;
@@ -367,7 +317,6 @@ body.header-hidden #map {
     z-index: 5;
 }
 
-/* *** تعديل: تصغير حجم صورة المستخدم على الخريطة *** */
 .user-marker-photo {
     width: 45px;
     height: 45px;
@@ -421,58 +370,19 @@ body.header-hidden #map {
     to { transform: scale(1.1); box-shadow: 0 0 10px 5px rgba(40, 167, 69, 0); }
 }
 
-.poi-marker {
-    width: 35px;
-    height: 35px;
-    background-color: #FFC107;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #333;
-    font-size: 1.2em;
-    border: 2px solid #e0a800;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    cursor: pointer;
-    transition: transform 0.2s ease;
+.poi-marker, .meeting-point-marker {
+    width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.2s ease;
 }
-.poi-marker:hover { transform: scale(1.1); }
-
-.meeting-point-marker {
-    width: 45px;
-    height: 45px;
-    background-color: #17a2b8;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.8em;
-    border: 3px solid #138496;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-.meeting-point-marker:hover { transform: scale(1.1); }
+.poi-marker { background-color: #FFC107; color: #333; font-size: 1.2em; border: 2px solid #e0a800; }
+.meeting-point-marker { background-color: #17a2b8; color: white; font-size: 1.8em; border: 3px solid #138496; }
+.poi-marker:hover, .meeting-point-marker:hover { transform: scale(1.1); }
 
 .feature-section {
-    background-color: #f2f4f6;
-    padding: 15px;
-    border-radius: var(--border-radius);
-    border: 1px solid #e0e0e0;
-    margin-bottom: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    background-color: #f2f4f6; padding: 15px; border-radius: var(--border-radius);
+    border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px;
 }
-.feature-section h3 {
-    color: var(--primary-color);
-    margin: 0;
-    font-size: 1.3em;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+.feature-section h3 { color: var(--primary-color); margin: 0; font-size: 1.3em; display: flex; align-items: center; gap: 8px; }
 .feature-info { font-size: 0.9em; color: #555; margin: 0; }
 .feature-section button:disabled { background-color: var(--secondary-color); cursor: not-allowed; opacity: 0.7; }
 .feature-section button:disabled:hover { background-color: var(--secondary-color); transform: none; }
@@ -486,21 +396,10 @@ input:focus + .slider { box-shadow: 0 0 1px var(--accent-color); }
 input:checked + .slider:before { transform: translateX(26px); }
 
 .bottom-chat-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: #fff;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-    display: flex;
-    align-items: center;
-    padding: 10px;
-    gap: 10px;
-    z-index: 15;
-    direction: rtl;
-    unicode-bidi: embed;
-    transform: translateY(100%);
-    transition: transform 0.3s ease-in-out;
+    position: fixed; bottom: 0; left: 0; width: 100%; background-color: #fff;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; align-items: center;
+    padding: 10px; gap: 10px; z-index: 15; direction: rtl; unicode-bidi: embed;
+    transform: translateY(100%); transition: transform 0.3s ease-in-out;
 }
 .bottom-chat-bar.active { transform: translateY(0); }
 #bottomChatFriendSelect { flex-basis: 150px; padding: 8px; border-radius: var(--border-radius); border: 1px solid #ccc; font-size: 0.9em; }
@@ -510,147 +409,67 @@ input:checked + .slider:before { transform: translateX(26px); }
 
 .search-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .search-form button { grid-column: 1 / -1; }
-#moazebResultsContainer {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    border-radius: var(--border-radius);
-    padding: 10px;
-    background-color: white;
-}
-.moazeb-card {
-    background-color: #f9f9f9;
-    padding: 15px;
-    border-radius: var(--border-radius);
-    margin-bottom: 10px;
-    border-right: 5px solid var(--accent-color);
-}
+#moazebResultsContainer { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: var(--border-radius); padding: 10px; background-color: white; }
+.moazeb-card { background-color: #f9f9f9; padding: 15px; border-radius: var(--border-radius); margin-bottom: 10px; border-right: 5px solid var(--accent-color); }
 .moazeb-card h4 { margin: 0 0 10px 0; color: var(--primary-color); }
 .moazeb-card p { margin: 5px 0; font-size: 0.95em; color: #555; }
 .moazeb-card p i { margin-left: 8px; color: var(--secondary-color); }
 
+.moazeb-marker { background-color: #006400; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(0,0,0,0.3); border: 2px solid white; }
+.moazeb-marker i { font-size: 14px; }
 
-
-.moazeb-marker {
-    background-color: #006400; /* أخضر داكن */
-    color: white;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    border: 2px solid white;
-}
-
-.moazeb-marker i {
-    font-size: 14px;
-}
-
-.map-controls {
-    position: absolute;
-    top: 80px;
-    right: 10px;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
+.map-controls { position: absolute; top: 100px; right: 10px; z-index: 10; display: flex; flex-direction: column; gap: 10px; }
 .map-control-btn {
-    width: 40px;
-    height: 40px;
-    background-color: var(--panel-bg);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: var(--shadow);
-    border: 1px solid #ddd;
-    font-size: 1.2em;
+    width: 40px; height: 40px; background-color: var(--panel-bg); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    box-shadow: var(--shadow); border: 1px solid #ddd; font-size: 1.2em; color: #333;
 }
-.map-control-btn:hover {
-    background-color: #f0f0f0;
+.map-control-btn:hover { background-color: #f0f0f0; }
+.capture-btn { background-color: #17a2b8 !important; color: white !important; }
+.capture-btn:hover { background-color: #138496 !important; }
+
+/* *** إضافة جديدة: تنسيق زر إعادة تركيز الرحلة *** */
+.refocus-route-btn {
+    background-color: #6f42c1 !important; /* بنفسجي */
+    color: white !important;
+    border-color: #5a36a0 !important;
+}
+.refocus-route-btn:hover {
+    background-color: #5a36a0 !important;
 }
 
-.moazeb-marker i {
-    font-size: 14px;
-}
 
-/* style.css - إضافة بعض التعديلات */
-.locate-moazeb-btn {
-    background-color: #17a2b8;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    padding: 5px 10px;
-    margin-top: 5px;
-    cursor: pointer;
-    width: 100%;
-    text-align: center;
-}
+.popup-button-container { display: flex; gap: 10px; margin-top: 10px; }
+.popup-button-container button { flex-grow: 1; padding: 8px; border-radius: 5px; border: none; color: white; cursor: pointer; font-size: 0.9em; }
+.popup-btn { padding: 8px 12px !important; font-size: 1.2em !important; border: none; border-radius: 50%; color: white;}
+.unfriend-btn { background-color: var(--danger-color); }
+.chat-friend-btn { background-color: var(--primary-color); }
+.reconnect-friend-btn { background-color: #17a2b8; }
 
-.locate-moazeb-btn:hover {
-    background-color: #138496;
+.friend-request-dialog {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: white; padding: 25px; border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.3); z-index: 1000;
+    text-align: center; min-width: 300px; animation: fadeIn 0.3s ease-out;
 }
+.friend-request-dialog h3 { color: var(--primary-color); margin-bottom: 15px; }
+.friend-request-dialog p { margin: 10px 0; font-size: 1.1em; }
+.dialog-buttons { display:flex; justify-content:space-around; margin-top:20px; }
+.dialog-buttons button { padding: 10px 25px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
+.accept-btn { background:var(--accent-color); }
+.reject-btn { background:var(--danger-color); }
 
-/* *** بداية الإضافة الجديدة: تنسيقات الميزات الجديدة *** */
-.coord-display-icon {
-    cursor: pointer;
-    color: var(--secondary-color);
-    margin-right: 10px;
-    font-size: 1.1em;
-}
-.coord-display-icon:hover {
-    color: var(--primary-color);
-}
-.mapboxgl-popup-content h3 {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+.coord-display-icon { cursor: pointer; color: var(--secondary-color); margin-right: 10px; font-size: 1.1em; }
+.coord-display-icon:hover { color: var(--primary-color); }
+.mapboxgl-popup-content h3 { display: flex; justify-content: space-between; align-items: center; }
 
-#map-style-switcher {
-    display: none; /* Hidden by default */
-    flex-direction: column;
-    gap: 5px;
-    background-color: var(--panel-bg);
-    padding: 5px;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow);
-}
-#map-style-switcher.active {
-    display: flex;
-}
-.style-btn {
-    background-color: white;
-    border: 1px solid #ddd;
-    padding: 8px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 0.9em;
-    font-family: 'Cairo', sans-serif;
-}
-.style-btn:hover {
-    background-color: #f0f0f0;
-}
-.style-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
+#map-style-switcher { display: none; flex-direction: column; gap: 5px; background-color: var(--panel-bg); padding: 5px; border-radius: var(--border-radius); box-shadow: var(--shadow); }
+#map-style-switcher.active { display: flex; }
+.style-btn { background-color: white; border: 1px solid #ddd; padding: 8px; border-radius: 5px; cursor: pointer; font-size: 0.9em; font-family: 'Cairo', sans-serif; }
+.style-btn:hover { background-color: #f0f0f0; }
+.style-btn.active { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
 
-.search-result-marker {
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="%23dc3545"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>');
-    background-size: cover;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-}
-/* *** نهاية الإضافة الجديدة *** */
-
+.search-result-marker { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="%23dc3545"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>'); background-size: cover; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; }
 
 @media (max-width: 768px) {
     .main-header { flex-direction: column; gap: 0px; padding: 5px; }
@@ -668,217 +487,34 @@ input:checked + .slider:before { transform: translateX(26px); }
     .bottom-chat-bar { padding: 5px; gap: 5px; }
     #bottomChatFriendSelect, #bottomChatInput, #bottomChatSendBtn, #toggleChatHistoryBtn { font-size: 0.8em; padding: 6px; }
     .search-form { grid-template-columns: 1fr; }
-    #search-container { top: 130px; /* Adjust for taller header on mobile */ }
 }
 
 /* ========== أنماط التوجيه والبحث ========== */
-
-/* زر التوجيه */
-#showDirectionsBtn {
-    background-color: #6f42c1;
-    border-color: #6f42c1;
-}
-
-#showDirectionsBtn:hover {
-    background-color: #5a36a0;
-    border-color: #5a36a0;
-}
-
-/* نتائج البحث */
-.search-results-dropdown, .suggestions-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: white;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    max-height: 250px;
-    overflow-y: auto;
-    z-index: 1000;
-    box-shadow: var(--shadow);
-    direction: rtl;
-    unicode-bidi: embed;
-}
-
-.search-result-item {
-    padding: 12px;
-    cursor: pointer;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: background-color 0.2s ease;
-}
-
-.search-result-item:hover {
-    background-color: #f8f9fa;
-}
-
-.search-result-item i {
-    color: var(--primary-color);
-}
-
-.search-result-item strong {
-    display: block;
-    font-size: 1em;
-    color: var(--text-color);
-}
-
-.search-result-item small {
-    color: #6c757d;
-    font-size: 0.85em;
-}
-
-/* نافذة التوجيه */
-.directions-section {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: var(--border-radius);
-    margin-bottom: 15px;
-    border-left: 4px solid var(--primary-color);
-}
-
-.directions-section h3 {
-    margin-top: 0;
-    color: var(--primary-color);
-    font-size: 1.2em;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-#startPointInput, #endPointInput {
-    width: 100%;
-    padding: 12px;
-    margin: 10px 0;
-    border: 2px solid #ddd;
-    border-radius: var(--border-radius);
-    font-size: 1em;
-    background-color: white;
-}
-
-#startPointInput:focus, #endPointInput:focus {
-    border-color: var(--primary-color);
-    outline: none;
-    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
-}
-
-/* أزرار التحكم بالمسار */
-.primary-btn {
-    background-color: var(--accent-color) !important;
-    border-color: var(--accent-color) !important;
-}
-
-.primary-btn:hover {
-    background-color: #218838 !important;
-}
-
-/* معلومات المسار */
-.route-info {
-    background-color: #e7f3ff;
-    padding: 15px;
-    border-radius: var(--border-radius);
-    border: 1px solid #b3d7ff;
-    margin-top: 15px;
-}
-
-.route-info p {
-    margin: 8px 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.route-info i {
-    color: var(--primary-color);
-}
-
-/* أيقونات البداية والنهاية */
-.mapboxgl-marker .start-icon {
-    background-color: #00FF00;
-    border: 3px solid white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-}
-
-.mapboxgl-marker .end-icon {
-    background-color: #FF0000;
-    border: 3px solid white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
-}
-
-/* المسارات على الخريطة */
-.mapboxgl-layer[id^="route-"] {
-    filter: drop-shadow(0 0 5px rgba(0, 123, 255, 0.5));
-}
-
-/* شريط معلومات المسار المباشر */
-#route-info-bar {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
-    padding: 10px 20px;
-    border-radius: var(--border-radius);
-    z-index: 12;
-    display: none; /* Hidden by default */
-    align-items: center;
-    gap: 20px;
-    box-shadow: var(--shadow);
-    font-size: 1.1em;
-}
-#route-info-bar.active {
-    display: flex;
-}
-#route-info-bar i {
-    color: var(--accent-color);
-}
-/* إضافة إلى style.css */
-.search-result-item .fa-draw-polygon {
-    color: #17a2b8;
-}
-
-.search-result-item .fa-map-marker-alt {
-    color: var(--primary-color);
-}
-
-.search-result-item small {
-    display: block;
-    margin-top: 2px;
-}
-
-/* التكيف مع الشاشات الصغيرة */
-@media (max-width: 768px) {
-    #mapSearchInput {
-        width: 180px;
-        font-size: 0.8em;
-        padding: 8px;
-    }
-    
-    .search-results-dropdown, .suggestions-dropdown {
-        max-height: 200px;
-    }
-    
-    .directions-section {
-        padding: 10px;
-    }
-    
-    .directions-section h3 {
-        font-size: 1em;
-    }
-
-    #route-info-bar {
-        width: 90%;
-        font-size: 0.9em;
-        padding: 8px 12px;
-        gap: 10px;
-    }
-}
+#showDirectionsBtn { background-color: #6f42c1; border-color: #6f42c1; }
+#showDirectionsBtn:hover { background-color: #5a36a0; border-color: #5a36a0; }
+.search-results-dropdown, .suggestions-dropdown { position: absolute; top: 100%; left: 0; right: 0; margin-top: 5px; background: white; border: 1px solid #ccc; border-radius: 8px; max-height: 300px ; overflow-y: auto; z-index: 1000; box-shadow: var(--shadow); direction: rtl; unicode-bidi: embed; }
+.search-result-item { padding: -1px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; transition: background-color 0.2s ease; }
+.search-result-item:hover { background-color: #f8f9fa; }
+.search-result-item i { color: var(--primary-color); }
+.search-result-item strong { display: block; font-size: 1em; color: var(--text-color); }
+.search-result-item small { color: #6c757d; font-size: 0.85em; }
+.directions-section { background-color: #f8f9fa; padding: 15px; border-radius: var(--border-radius); margin-bottom: 15px; border-left: 4px solid var(--primary-color); }
+.directions-section h3 { margin-top: 0; color: var(--primary-color); font-size: 1.2em; display: flex; align-items: center; gap: 8px; }
+#startPointInput, #endPointInput { width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #ddd; border-radius: var(--border-radius); font-size: 1em; background-color: white; }
+#startPointInput:focus, #endPointInput:focus { border-color: var(--primary-color); outline: none; box-shadow: 0 0 5px rgba(0, 123, 255, 0.3); }
+.primary-btn { background-color: var(--accent-color) !important; border-color: var(--accent-color) !important; }
+.primary-btn:hover { background-color: #218838 !important; }
+.route-info { background-color: #e7f3ff; padding: 15px; border-radius: var(--border-radius); border: 1px solid #b3d7ff; margin-top: 15px; }
+.route-info p { margin: 8px 0; display: flex; align-items: center; gap: 8px; }
+.route-info i { color: var(--primary-color); }
+.mapboxgl-marker .start-icon { background-color: #00FF00; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); }
+.mapboxgl-marker .end-icon { background-color: #FF0000; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); }
+.mapboxgl-layer[id^="route-"] { filter: drop-shadow(0 0 5px rgba(0, 123, 255, 0.5)); }
+#route-info-bar { position: absolute; bottom: 75px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.7); color: white; padding: 10px 20px; border-radius: var(--border-radius); z-index: 12; display: none; align-items: center; gap: 20px; box-shadow: var(--shadow); font-size: 1.1em; }
+#route-info-bar.active { display: flex; }
+#route-info-bar i { color: var(--accent-color); }
+.search-result-item .fa-draw-polygon { color: #17a2b8; }
+.search-result-item .fa-map-marker-alt { color: var(--primary-color); }
+.search-result-item small { display: block; margin-top: 2px; }
+#unlinkFromMoazebBtn { background-color: var(--danger-color); margin-top: 10px; }
+#unlinkFromMoazebBtn:hover { background-color: #c82333; }

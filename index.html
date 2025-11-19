@@ -25,7 +25,6 @@
             <button id="showAllMoazebBtn" title="عرض جميع المضيفين"><i class="fas fa-map-marked-alt"></i> عرض المعزب</button>
             <button id="whatsappHelpBtn" title="الدعم الفني والاستفسارات"><i class="fas fa-question-circle"></i> الدعم</button>
             
-            
             <!-- زر التوجيه (ذهاب) -->
             <button id="showDirectionsBtn" title="التوجيه والمسارات"><i class="fas fa-directions"></i> ذهاب</button>
 
@@ -35,8 +34,6 @@
                     style="padding: 10px; border-radius: 25px; border: 1px solid #ccc; width: 250px; font-size: 0.9em; direction: rtl;">
                 <div id="searchResults" class="search-results-dropdown" style="display: none;"></div>
             </div>
-            
-            
             
             <button id="sosButton" class="sos-btn" style=" background-color: rgba(255, 20, 0, 0.93); text-align:center" title="زر الطوارئ"><i class="fas fa-exclamation-triangle"></i></button>
         </nav>
@@ -101,10 +98,18 @@
         <h2><i class="fas fa-user-friends"></i> ربط حساب آخر</h2>
         <input type="text" id="friendCodeInput" placeholder="أدخل رمز الربط الخاص بالصديق">
         <button id="connectFriendBtn"><i class="fas fa-plus-circle"></i> ربط</button>
+        
         <div id="linkedFriendsList">
-            <h3><i class="fas fa-users"></i> الأصدقاء المرتبطون:</h3>
+            <h3><i class="fas fa-users"></i> الأصدقاء والمضيفون المرتبطون:</h3>
             <ul id="friendsList"></ul>
         </div>
+        
+        <!-- *** إضافة جديدة: قائمة الأصدقاء السابقين *** -->
+        <div id="previousFriendsListSection" style="margin-top: 20px;">
+            <h3><i class="fas fa-history"></i> سجل الاتصالات (للربط مجدداً):</h3>
+            <ul id="previousFriendsList"></ul>
+        </div>
+        
         <div class="feature-section" style="margin-top: 20px;">
             <h3><i class="fas fa-users-cog"></i> إدارة المجموعات</h3>
             <p class="feature-info">ميزة لربط مجموعة من الأصدقاء معاً. (قيد التطوير).</p>
@@ -184,6 +189,14 @@
     <!-- لوحة المعزب -->
     <div class="overlay-panel" id="moazebPanel">
         <h2><i class="fas fa-home"></i> قسم المضيفين (المعزب)</h2>
+        
+        <!-- زر إلغاء الربط من المضيف -->
+        <div class="feature-section">
+            <h3><i class="fas fa-unlink"></i> إدارة الربط الحالي</h3>
+            <p class="feature-info">إلغاء الربط مع المضيف الحالي المرتبط به.</p>
+            <button id="unlinkFromMoazebBtn" class="danger-btn"><i class="fas fa-unlink"></i> إلغاء الربط مع المضيف الحالي</button>
+        </div>
+        
         <div class="feature-section">
             <h3><i class="fas fa-search"></i> البحث عن مضيف</h3>
                         <h5><i class="fas fa-search"></i> قم بالبحث عن معزب برقم هاتف او المحافظة او القضاء</h5>
